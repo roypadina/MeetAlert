@@ -1,0 +1,48 @@
+import AppKit
+import SwiftUI
+
+@main
+struct MeetAlertApp: App {
+    @State private var store = Store()
+
+    init() {
+        let store = store
+        Task { @MainActor in store.start() }
+    }
+
+    var body: some Scene {
+        MenuBarExtra {
+            MenuContent(store: store)
+        } label: {
+            Image(systemName: "calendar")
+            Text(store.menuBarText)
+        }
+        Settings {
+            SettingsView(store: store)
+        }
+    }
+}
+
+private struct MenuContent: View {
+    let store: Store
+
+    var body: some View {
+        if store.upcomingList.isEmpty {
+            Text("No meetings in the next 2h")
+        }
+        ForEach(store.upcomingList) { m in
+            Text("\(m.start.formatted(date: .omitted, time: .shortened))  \(m.title)")
+        }
+        if let snoozed = store.upcomingList.first(where: { store.snoozedUntil[$0.key] != nil }),
+           let until = store.snoozedUntil[snoozed.key] {
+            Text("Snoozed: \(snoozed.title) until \(until.formatted(date: .omitted, time: .shortened))")
+        }
+        if let next = store.upcomingList.first {
+            Button("Ignore \(next.title) forever") { store.ignoreForever(next.key) }
+        }
+        Divider()
+        SettingsLink { Text("Settings…") }
+        Button("Edit config file…") { NSWorkspace.shared.open(Store.configURL) }
+        Button("Quit") { NSApp.terminate(nil) }
+    }
+}

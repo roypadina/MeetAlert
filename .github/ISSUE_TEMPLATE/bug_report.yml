@@ -1,0 +1,49 @@
+name: Bug report
+description: Something isn't working as expected
+labels: ["bug"]
+body:
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What did you expect, and what happened instead?
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Create a meeting starting in 5 minutes
+        2. ...
+    validations:
+      required: true
+  - type: input
+    id: macos
+    attributes:
+      label: macOS version
+      placeholder: "14.5"
+    validations:
+      required: true
+  - type: dropdown
+    id: calendar
+    attributes:
+      label: Calendar provider
+      options:
+        - iCloud
+        - Google
+        - Exchange
+        - CalDAV (other)
+        - Not calendar-related
+  - type: textarea
+    id: config
+    attributes:
+      label: Relevant config.json fields
+      description: Contents of ~/.config/meetalert/config.json (redact your ntfy topic/server if private).
+      render: json
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs (optional)
+      description: "`log show --predicate 'process == \"MeetAlert\"' --last 10m`, or output from `MEETALERT_TEST=1` if the issue reproduces there."
+      render: shell

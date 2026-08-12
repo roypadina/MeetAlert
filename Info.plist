@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleExecutable</key>
+    <string>MeetAlert</string>
+    <key>CFBundleIdentifier</key>
+    <string>com.roy.meetalert</string>
+    <key>CFBundleName</key>
+    <string>MeetAlert</string>
+    <key>CFBundlePackageType</key>
+    <string>APPL</string>
+    <key>CFBundleShortVersionString</key>
+    <string>1.0</string>
+    <key>LSMinimumSystemVersion</key>
+    <string>14.0</string>
+    <key>LSUIElement</key>
+    <true/>
+    <key>NSCalendarsFullAccessUsageDescription</key>
+    <string>MeetAlert reads your calendar to warn you before meetings.</string>
+</dict>
+</plist>
