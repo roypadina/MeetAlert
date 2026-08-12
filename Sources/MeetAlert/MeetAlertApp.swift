@@ -33,12 +33,15 @@ private struct MenuContent: View {
         ForEach(store.upcomingList) { m in
             Text("\(m.start.formatted(date: .omitted, time: .shortened))  \(m.title)")
         }
-        if let snoozed = store.upcomingList.first(where: { store.snoozedUntil[$0.key] != nil }),
-           let until = store.snoozedUntil[snoozed.key] {
+        if let snoozed = store.upcomingList.first(where: { store.snoozedUntilDate(for: $0.key) != nil }),
+           let until = store.snoozedUntilDate(for: snoozed.key) {
             Text("Snoozed: \(snoozed.title) until \(until.formatted(date: .omitted, time: .shortened))")
         }
         if let next = store.upcomingList.first {
             Button("Ignore \(next.title) forever") { store.ignoreForever(next.key) }
+        }
+        if store.calendarSelectionBroken {
+            Text("Calendar selection invalid — open Settings")
         }
         Divider()
         SettingsLink { Text("Settings…") }

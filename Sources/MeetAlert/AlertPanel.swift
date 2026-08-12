@@ -5,18 +5,82 @@ import SwiftUI
 /// Multiple panels stack vertically; dismissing one closes the gap for the ones below it.
 @MainActor
 enum AlertPanel {
-    private static var active: [NSPanel] = []
+    private static var active: [(key: String, panel: NSPanel)] = []
     private static let width: CGFloat = 560
     private static let height: CGFloat = 140
     private static let gap: CGFloat = 8
     private static let margin: CGFloat = 12
 
-    static func show(_ m: Store.Meeting,
+    static func show(_ m: Store.Meeting, alertKey: String,
                       onAck: @escaping () -> Void,
                       onSnooze: @escaping (Int) -> Void,
                       onSnoozeStart: @escaping () -> Void,
                       onIgnore: @escaping () -> Void) {
-        guard let screen = NSScreen.main else { return }
+        if let existing = active.first(where: { $0.key == alertKey }) {
+            existing.panel.orderFrontRegardless()  // already showing (e.g. re-tick) — don't stack a duplicate
+            return
+        }
+        guard let screen = screenUnderMouse() else { return }
+        let panel = makePanel()
+
+        func closeThen(_ action: @escaping () -> Void) {
+            dismiss(panel)
+            action()
+        }
+
+        let onJoin: (() -> Void)? = m.joinURL.map { url in { closeThen { NSWorkspace.shared.open(url); onAck() } } }
+
+        panel.contentView = NSHostingView(rootView: AlertContent(
+            meeting: m,
+            onJoin: onJoin,
+            onSnooze1: { closeThen { onSnooze(1) } },
+            onSnooze5: { closeThen { onSnooze(5) } },
+            onSnoozeStart: { closeThen(onSnoozeStart) },
+            onIgnore: { closeThen(onIgnore) },
+            onDismiss: { closeThen(onAck) }
+        ))
+
+        panel.setFrame(frame(forIndex: active.count, screen: screen), display: false)
+        panel.orderFrontRegardless()
+        active.append((alertKey, panel))
+
+        NSSound(named: "Funk")?.play()
+    }
+
+    /// Reduced-buttons variant for the meeting-overrun heads-up: Dismiss only, no ack/snooze/ignore.
+    static func showOverrun(key: String, title: String, subtitle: String, onDismiss: @escaping () -> Void) {
+        if let existing = active.first(where: { $0.key == key }) {
+            existing.panel.orderFrontRegardless()
+            return
+        }
+        guard let screen = screenUnderMouse() else { return }
+        let panel = makePanel()
+
+        func closeThen(_ action: @escaping () -> Void) {
+            dismiss(panel)
+            action()
+        }
+
+        panel.contentView = NSHostingView(rootView: OverrunContent(
+            title: title, subtitle: subtitle,
+            onDismiss: { closeThen(onDismiss) }
+        ))
+
+        panel.setFrame(frame(forIndex: active.count, screen: screen), display: false)
+        panel.orderFrontRegardless()
+        active.append((key, panel))
+
+        NSSound(named: "Funk")?.play()
+    }
+
+    /// Closes the panel for `key` if one is open — e.g. an ACK or snooze that arrived via the phone
+    /// push, which previously stopped escalation but left the desktop panel sitting there forever.
+    static func dismiss(key: String) {
+        guard let idx = active.firstIndex(where: { $0.key == key }) else { return }
+        remove(at: idx)
+    }
+
+    private static func makePanel() -> NSPanel {
         let panel = NSPanel(
             contentRect: NSRect(x: 0, y: 0, width: width, height: height),
             styleMask: [.nonactivatingPanel, .borderless],
@@ -30,51 +94,51 @@ enum AlertPanel {
         panel.isOpaque = false
         panel.hidesOnDeactivate = false
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]
-
-        func closeThen(_ action: @escaping () -> Void) {
-            dismiss(panel)
-            action()
-        }
-
-        panel.contentView = NSHostingView(rootView: AlertContent(
-            meeting: m,
-            onSnooze1: { closeThen { onSnooze(1) } },
-            onSnooze5: { closeThen { onSnooze(5) } },
-            onSnoozeStart: { closeThen(onSnoozeStart) },
-            onIgnore: { closeThen(onIgnore) },
-            onDismiss: { closeThen(onAck) }
-        ))
-
-        panel.setFrame(frame(forIndex: active.count, screen: screen), display: false)
-        panel.orderFrontRegardless()
-        active.append(panel)
-
-        NSSound(named: "Funk")?.play()
+        return panel
     }
 
     private static func dismiss(_ panel: NSPanel) {
-        guard let idx = active.firstIndex(of: panel) else { return }
+        guard let idx = active.firstIndex(where: { $0.panel == panel }) else { return }
+        remove(at: idx)
+    }
+
+    private static func remove(at idx: Int) {
+        let panel = active[idx].panel
         active.remove(at: idx)
         panel.orderOut(nil)
         reflow()
     }
 
+    // ponytail: reflow repositions ALL currently-open panels onto whichever screen has the mouse
+    // right now — correct for the common case (one alert at a time), but if several panels are
+    // stacked across different screens and the mouse has since moved, a dismiss can jump the
+    // survivors to the new screen. Upgrade to a per-panel screen if that turns out to matter.
     private static func reflow() {
-        guard let screen = NSScreen.main else { return }
-        for (i, panel) in active.enumerated() {
-            panel.setFrame(frame(forIndex: i, screen: screen), display: true)
+        guard let screen = screenUnderMouse() else { return }
+        for (i, entry) in active.enumerated() {
+            entry.panel.setFrame(frame(forIndex: i, screen: screen), display: true)
         }
     }
 
+    private static func screenUnderMouse() -> NSScreen? {
+        let location = NSEvent.mouseLocation
+        return NSScreen.screens.first { $0.frame.contains(location) } ?? NSScreen.main
+    }
+
+    /// Clamps to the last fully-visible slot on this screen — beyond that, extra panels overlap the
+    /// last slot instead of computing a Y coordinate below the screen's bottom edge.
     private static func frame(forIndex index: Int, screen: NSScreen) -> NSRect {
+        let maxSlots = max(1, Int((screen.visibleFrame.height - margin) / (height + gap)))
+        let clampedIndex = min(index, maxSlots - 1)
         let x = screen.visibleFrame.midX - width / 2
-        let y = screen.visibleFrame.maxY - margin - CGFloat(index + 1) * (height + gap) + gap
+        let y = screen.visibleFrame.maxY - margin - CGFloat(clampedIndex + 1) * (height + gap) + gap
         return NSRect(x: x, y: y, width: width, height: height)
     }
 }
 
 private struct AlertContent: View {
     let meeting: Store.Meeting
+    let onJoin: (() -> Void)?
     let onSnooze1: () -> Void
     let onSnooze5: () -> Void
     let onSnoozeStart: () -> Void
@@ -92,6 +156,9 @@ private struct AlertContent: View {
             .font(.subheadline).foregroundStyle(.secondary)
             Spacer(minLength: 0)
             HStack(spacing: 8) {
+                if let onJoin {
+                    Button("Join", action: onJoin).buttonStyle(.borderedProminent)
+                }
                 Button("Snooze 1m", action: onSnooze1)
                 Button("Snooze 5m", action: onSnooze5)
                 if meeting.start > Date() {
@@ -99,6 +166,28 @@ private struct AlertContent: View {
                 }
                 Spacer()
                 Button("Ignore forever", action: onIgnore)
+                Button("Dismiss", action: onDismiss).keyboardShortcut(.defaultAction)
+            }
+        }
+        .padding(16)
+        .frame(width: 560, height: 140, alignment: .leading)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
+        .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(.separator))
+    }
+}
+
+private struct OverrunContent: View {
+    let title: String
+    let subtitle: String
+    let onDismiss: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text(title).font(.title3.bold())
+            Text(subtitle).font(.subheadline).foregroundStyle(.secondary)
+            Spacer(minLength: 0)
+            HStack {
+                Spacer()
                 Button("Dismiss", action: onDismiss).keyboardShortcut(.defaultAction)
             }
         }

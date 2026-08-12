@@ -7,10 +7,11 @@ Work through these in order:
 1. **Is the calendar it's on actually enabled?** Menu bar icon → **Settings…** → **Calendars**
    — an unticked calendar is completely invisible to MeetAlert (`calendarIds` excludes it from
    the EventKit query, not just from the UI).
-2. **Is it within the alert window?** MeetAlert only fires for meetings starting within
-   `leadMinutes` from now, up to `lateAlertMinutes` after they've already started. A meeting
-   2 hours out won't alert yet; one that started 20 minutes ago with the default
-   `lateAlertMinutes: 10` never will.
+2. **Is it within an alert window?** Each entry in `alertMinutesBefore` (plus a `travelLeadMinutes`
+   window if the meeting has a physical location) opens its own window, from that offset until
+   `lateAlertMinutes` after it. A meeting 2 hours out won't alert yet; with the default
+   `alertMinutesBefore: [3, 0]` and `lateAlertMinutes: 10`, one that started more than 10 minutes
+   ago never will.
 3. **Sync lag.** If the event is genuinely new (just accepted an invite, calendar just synced),
    macOS's own calendar cache might not have it yet — MeetAlert only sees what EventKit already
    has. Open **Calendar.app → Settings → General** and set **"Refresh calendars"** to **Every
@@ -21,6 +22,34 @@ Work through these in order:
    it's in `state.json`'s `ignoredKeys` — see [Configuration](Configuration#un-ignoring-something)
    to undo it.
 6. **All-day.** `ignoreAllDay` defaults to `true`.
+7. **Declined.** If you (the current user) declined the invite, it's always skipped — there's
+   no setting to change this.
+
+## The first push came in at urgent priority instead of high
+
+Expected, not a bug: MeetAlert treats you as "away" — idle past `awayIdleSeconds` (default 120s),
+or your screen is locked — and skips the normal high-priority grace window for the *first* push
+when that's the case. If this fires too eagerly, raise `awayIdleSeconds` in Settings.
+
+## Escalation stopped after 3 pushes / stopped once the meeting was 15 minutes old / never escalated at all
+
+Also expected. Escalation repeats at most 3 times, and never continues past 15 minutes after the
+meeting's start time, regardless of `escalationSeconds`. Both bounds are fixed, not configurable.
+If an alert itself first fired *later* than that 15-minute mark (e.g. a very late offset, or a
+missed alert caught up via `lateAlertMinutes`), there's no escalation window left at all by the
+time it fires — you'll get exactly one push and no re-pushes, which is correct, not a bug.
+
+## The 2-minute overrun popup, or the morning agenda push, never shows up
+
+- Check `endWarning` (overrun) or `agendaHour` (agenda) in Settings/`config.json` — both are
+  off unless enabled (`endWarning` defaults **on**, `agendaHour` defaults **off**, `null`).
+- Both are skipped entirely under `MEETALERT_TEST=1`.
+- The agenda push only fires once its hour has passed for the day (`Calendar.current`'s local
+  hour) and only once per calendar day — check `state.json`'s `lastAgendaDay`; if it already
+  matches today, it already fired (or there were no meetings left to summarize) and won't again
+  until tomorrow.
+- The overrun popup only fires once per meeting occurrence — check `alertedKeys` for a
+  `...@end` key if you're unsure whether it already fired.
 
 ## Menu bar icon is missing
 

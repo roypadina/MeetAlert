@@ -31,19 +31,36 @@ Open the ntfy app → **+** → paste your topic name → **Subscribe**. Leave t
 
 Menu bar icon → **Settings…** → **ntfy** section: fill in `Server` and `Topic` to match. Or
 edit `~/.config/meetalert/config.json` directly — it's re-read every 30 seconds, no restart
-needed. The app ships with a placeholder topic used during development; you need to set your
-own before this does anything useful for you.
+needed. `ntfyTopic` is **empty by default**, which means phone push (and escalation with it) is
+completely off — desktop popups still work, but nothing reaches your phone until you set a topic
+here. Use the **"Send test push"** button in Settings → ntfy to confirm it's actually working.
 
 ## 5. Make urgent priority actually bypass silence
 
 This is the fiddly part, and it's a real limitation of ntfy's mobile clients, not something
 MeetAlert can fix on its own.
 
-**What MeetAlert sends:** the first alert at `X-Priority: high`; if nobody acks within
-`escalationSeconds`, a second push at `X-Priority: urgent` (priority 5, tag `rotating_light`).
-The intent is that the urgent one is loud enough, and persistent enough, to wake you up even on
-a silenced phone — but whether it actually does depends on OS-level notification settings the
-ntfy app can't fully control for you.
+**What MeetAlert sends:** the first alert normally goes out at priority 4 (high) — but if
+MeetAlert thinks you're away from the Mac (idle past `awayIdleSeconds`, or the screen is locked),
+that first push skips straight to priority 5 (urgent) instead, since there's no point waiting on
+a grace window nobody at the desk would see. Either way, if nobody acks within `escalationSeconds`,
+it re-sends at priority 5 (tag `rotating_light`) — up to **3 times total**, and never past
+**15 minutes** after the meeting's start (if the alert itself first fires later than that, there's
+no escalation window left — just the one push). The intent is that the urgent pushes are loud
+enough, and persistent enough, to wake you up even on a silenced phone — but whether they actually
+do depends on OS-level notification settings the ntfy app can't fully control for you. Every push
+is sent through ntfy's JSON publish API (not the older header-based endpoint), so titles with
+emoji or non-Latin text come through intact.
+
+**Action buttons on the alert push:** an **ACK** button (acknowledges and stops escalation), a
+**Join** button when MeetAlert found a video-call link in the event, and a **Snooze 5m** button
+(snoozes the alert — clamped to the meeting's start if it hasn't started yet — and stops
+escalation). **Join only opens the link — it does not ack.** That's a hard ntfy limitation: a
+"view" action just opens a URL on your phone and never talks back to MeetAlert, so there's no way
+for it to also register an ack. Tap **ACK** separately if you want to stop escalation. ntfy caps
+notifications at 3 actions, so without a Join link it's just ACK + Snooze 5m — and escalation
+re-pushes carry ACK (+ Join) too, not just the first one. The separate daily morning-agenda push
+(if `agendaHour` is set) is plain default-priority, informational only — no actions, no escalation.
 
 ### Android
 

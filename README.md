@@ -28,6 +28,8 @@ stops being an excuse.
 - [How it works](#how-it-works)
 - [Configuration](#configuration)
 - [Filtering / ignoring events](#filtering--ignoring-events)
+- [Joining a meeting](#joining-a-meeting)
+- [Meeting overrun & morning agenda](#meeting-overrun--morning-agenda)
 - [Testing](#testing)
 - [Google Calendar (and any other calendar)](#google-calendar-and-any-other-calendar)
 - [Support](#support)
@@ -35,13 +37,18 @@ stops being an excuse.
 
 ## Features
 
-- **Desktop popup** that stays on screen until you act on it — no auto-dismiss, no silently missed alert.
-- **Phone push via [ntfy](https://ntfy.sh)** at the same moment, with a tappable **ACK** action.
-- **Urgent escalation** — if nobody acks within a configurable window, MeetAlert resends the push at urgent priority so it can punch through a phone on silent/DND.
-- **Snooze** for 1 minute, 5 minutes, or **till start**.
-- Reads **every calendar macOS syncs** — Google, iCloud, Exchange, CalDAV — with zero API setup. See [below](#google-calendar-and-any-other-calendar).
+- **Multiple alerts per meeting** at whatever offsets you configure — minutes before, at start, or after (a late nag) — not just one.
+- **Desktop popup** that stays on screen until you act on it — no auto-dismiss, no silently missed alert — shown on whichever display your mouse is on.
+- **One-tap Join** — a prominent Join button (and a matching push action) opens the Zoom/Meet/Teams/Webex/Whereby link straight from the alert.
+- **Phone push via [ntfy](https://ntfy.sh)** at the same moment, with tappable **ACK**, **Join**, and **Snooze 5m** actions.
+- **Away-aware escalation** — idle past a threshold or screen-locked, and the first push already goes out at urgent priority instead of waiting on a grace window nobody at the desk would see.
+- **Repeating urgent escalation** — up to 3 re-pushes (never past 15 minutes after the meeting starts) until you ack or snooze, not just one.
+- **Meeting-overrun warning** — a Mac-only heads-up 2 minutes before a meeting ends, naming what's next.
+- **Morning agenda push** — an optional daily rundown of today's meetings and your largest free gap.
+- Reads **every calendar macOS syncs** — Google, iCloud, Exchange, CalDAV — with zero API setup, and skips meetings you've declined. See [below](#google-calendar-and-any-other-calendar).
+- **Travel-lead alerts** for meetings with a physical address — one extra early alert to account for getting there.
 - Per-calendar checklist, all-day filtering, and keyword-based ignore list.
-- Menu-bar countdown to your next meeting; starts at login automatically.
+- Menu-bar countdown to your next meeting (or time left in the one you're in); starts at login, and re-scans immediately on wake.
 - Ad-hoc signed, un-notarized, no analytics, no network calls besides the ntfy push you configure.
 
 ## Install
@@ -62,8 +69,11 @@ brew install --cask meetalert
 > ```
 
 On first launch macOS will prompt for **Calendar** access — MeetAlert can't see your meetings
-without it. It also registers itself to **start at login** automatically (no toggle for this
-yet; see [Configuration](#configuration) if you want to turn it off).
+without it. It also registers itself to **start at login** automatically every launch — there's
+no in-app setting to opt out. To stop it, quit MeetAlert via the menu's **Quit** and don't reopen
+it (on top of removing it in **System Settings → General → Login Items & Extensions**) — see the
+[Installation wiki page](https://github.com/roypadina/MeetAlert/wiki/Installation) for why simply
+relaunching can re-register it.
 
 ### Build from source
 
@@ -90,8 +100,8 @@ No Xcode project — it's a plain Swift Package executable.
    you're [self-hosting](https://docs.ntfy.sh/install/)).
 4. Put the same **topic** (and server, if not `ntfy.sh`) into MeetAlert: menu bar icon →
    **Settings…** → **ntfy** section, or edit `~/.config/meetalert/config.json` directly.
-   > The app ships with a placeholder topic used during development — you must set your own
-   > before relying on this for anything real.
+   > `ntfyTopic` is **empty by default** — phone push, and escalation with it, stays completely
+   > off until you set one. This step is required for anything beyond the desktop popup.
 5. In the ntfy app, make sure **urgent (priority 5)** notifications are set up to bypass
    silence/Do Not Disturb — that's the whole point of the escalation. The exact steps differ
    between Android and iOS and are more fiddly than you'd hope; see the
@@ -106,13 +116,18 @@ Self-hosted ntfy servers work the same way — just set `ntfyServer` to your own
 
 | When | What happens |
 |---|---|
-| `leadMinutes` before start | Desktop popup appears **and** an ntfy push is sent (priority: high) with an **ACK** button. |
-| Anything up to escalation | Clicking **Dismiss**, **Snooze**, **Till start**, **Ignore forever**, or tapping **ACK** on the push all count as acknowledged — escalation is cancelled. |
-| `escalationSeconds` after the first alert, if still unacked | The push is resent at **urgent** priority (`rotating_light` tag) — meant to break through a silenced phone. |
-| Up to `lateAlertMinutes` after the actual start time | MeetAlert still fires the first alert even if it only *saw* the event this late — covers sync lag between Google/Exchange and macOS's local calendar cache. |
+| Each offset in `alertMinutesBefore` (before, at, or after start), plus one `travelLeadMinutes` offset for meetings with a physical address | Desktop popup appears on whichever screen your mouse is on, **and** an ntfy push goes out with **ACK**, **Join** (if there's a meeting link), and **Snooze 5m** actions. |
+| You're away from the Mac (idle past `awayIdleSeconds`, or the screen is locked) | That first push skips the high-priority grace window and goes straight out at **urgent** priority — nobody's at the desk to see the popup anyway. |
+| Several offsets of the same meeting come due in one scan (e.g. the event synced in late) | They collapse into **one** alert — the latest due one — instead of stacking popups. |
+| Anything up to escalation | Clicking **Dismiss**, **Join**, **Snooze**, **Till start**, or **Ignore forever** on the popup — or tapping **ACK** on the push — counts as acknowledged; escalation stops. Tapping **Snooze 5m** on the push snoozes it (clamped to the meeting's start) and also stops escalation. Tapping **Join** on the *push* only opens the meeting — it does **not** ack (that action never reports back to MeetAlert); the desktop popup's Join button does both. |
+| `escalationSeconds` after an unacked alert, repeating | The push resends at **urgent** priority (`rotating_light` tag) — up to **3 times**, and never past **15 minutes** after the meeting's start. If an alert itself first fires later than that (e.g. a very late offset), there's no escalation window left at all — just the one initial push. |
+| Up to `lateAlertMinutes` after an offset's scheduled time | MeetAlert still fires that alert even if it only *saw* the event this late — covers sync lag between Google/Exchange and macOS's local calendar cache. |
+| 2 minutes before a meeting ends (`endWarning`) | A Mac-only popup — no ntfy, no escalation — warns you it's ending, and names what starts within the next hour (or that nothing does). |
+| Once a day, at or after `agendaHour` (if set) | A single ntfy push (default priority, no actions) summarizes today's meetings and your largest free gap. |
 
-Each meeting occurrence alerts once (tracked in `state.json`); a snooze that comes back due
-re-shows the popup without re-sending a push or re-arming escalation.
+Each offset of a meeting occurrence alerts once (tracked in `state.json`); a snooze that comes
+back due re-shows the popup without re-sending a push or re-arming escalation. MeetAlert also
+rescans immediately on system wake, not just every 30 seconds.
 
 ## Configuration
 
@@ -123,14 +138,20 @@ raw file editing.
 
 | Field | Default | Meaning |
 |---|---|---|
-| `leadMinutes` | `3` | Minutes before start to fire the first alert. |
-| `lateAlertMinutes` | `10` | Still alert up to this many minutes *after* start (sync-lag cushion). |
-| `escalationSeconds` | `120` | Seconds to wait for an ack before escalating to urgent priority. |
+| `alertMinutesBefore` | `[3, 0]` | Minutes before start to fire an alert — one entry per alert. `0` = at start, negative = that many minutes *after* start (a late alert). Deduplicated and sorted (descending) on load. |
+| `lateAlertMinutes` | `10` | Still fire a missed alert up to this many minutes *after* its scheduled time (sync-lag cushion). |
+| `escalationSeconds` | `120` | Seconds between each escalation re-push (up to 3, and never past 15 minutes after the meeting's start). |
+| `awayIdleSeconds` | `120` | Idle time (or an immediate screen lock) before MeetAlert treats you as away and sends the first push at urgent priority instead of high. |
+| `travelLeadMinutes` | `30` | Extra early alert for meetings with a physical (non-video-call) location. |
+| `endWarning` | `true` | Mac-only popup 2 minutes before a meeting ends. |
+| `agendaHour` | `null` | Hour of day (0–23, local time) to push today's agenda. `null` = off. |
 | `ignoreAllDay` | `true` | Skip all-day events entirely. |
 | `ignoreKeywords` | `[]` | Case-insensitive substrings — any event title containing one is skipped. |
 | `ntfyServer` | `"https://ntfy.sh"` | Base URL of your ntfy server. |
-| `ntfyTopic` | *(placeholder)* | Your private ntfy topic — see [ntfy setup](#ntfy-setup). |
+| `ntfyTopic` | `""` (empty) | Your private ntfy topic. **Empty means phone push is off** — desktop popups still work, nothing goes to your phone. See [ntfy setup](#ntfy-setup). |
 | `calendarIds` | `null` | `null` = every calendar. Otherwise a list of calendar identifiers — set this via the Settings checklist, not by hand. |
+
+Declined invites are always skipped — there's no config knob for it.
 
 `state.json` in the same folder tracks which occurrences already alerted (`alertedKeys`, pruned
 after 24h) and which are permanently ignored (`ignoredKeys`) — see the
@@ -146,6 +167,25 @@ exact key format if you ever need to hand-edit it (e.g. to un-ignore something).
 - **One occurrence** — the menu's "Ignore *\<title\>* forever" button (or the popup's **Ignore
   forever**) ignores that specific meeting occurrence. For a *recurring* series, this only
   ignores the occurrence you clicked on — use a keyword filter to ignore the whole series.
+- **Declined invites** — always skipped, no config needed.
+
+## Joining a meeting
+
+If MeetAlert finds a Zoom, Google Meet, Microsoft Teams, Webex, or Whereby link in the event's
+URL, location, or notes (checked in that order), both the desktop popup and the ntfy push get a
+**Join** action — but they behave slightly differently. On the **desktop popup**, Join opens the
+link *and* acks in one step, same as Dismiss. On the **phone push**, Join only opens the link —
+it can't ack, since that kind of action never reports back to MeetAlert; use the **ACK** button
+on the push if you want to ack from your phone.
+
+## Meeting overrun & morning agenda
+
+- **Overrun warning** (`endWarning`, on by default) — 2 minutes before a meeting ends, a
+  Mac-only popup (no phone push, no escalation) tells you it's wrapping up and names whatever
+  starts within the next hour, or that nothing does.
+- **Morning agenda** (`agendaHour`, off by default) — set an hour in Settings or `config.json`
+  and MeetAlert pushes a single ntfy summary once a day: how many meetings, the first one, up
+  to 6 upcoming, and your largest free gap before 7pm.
 
 ## Testing
 
@@ -156,14 +196,21 @@ seconds. State transitions print to stdout so you can watch the whole pipeline:
 
 ```bash
 MEETALERT_TEST=1 build/MeetAlert.app/Contents/MacOS/MeetAlert
-# fired 1712345678
-# acked 1712345678      (if you click a button in the popup, or ACK the push)
-# escalated 1712345678  (if nothing acks it within 20s)
+# fired a1b2c3d4
+# acked a1b2c3d4      (if you click a button in the popup, or ACK the push)
+# escalated a1b2c3d4  (if nothing acks it within 20s)
 ```
+
+The token is a short hash of the alert's own key (meeting + offset), not a timestamp — it's just
+an opaque id shared between the "fired"/"acked"/"escalated" lines for the same alert.
 
 Run the executable inside the built `.app` directly (not `.build/release/MeetAlert`, and not
 via `open`) so the bundle's `Info.plist`/`LSUIElement` context is intact and stdout stays
 attached to your terminal.
+
+Test mode forces a few things for determinism: you're always treated as "present" (never away),
+the escalation loop caps at a single urgent resend instead of three, and both the meeting-overrun
+warning and the morning-agenda push are skipped entirely.
 
 ## Google Calendar (and any other calendar)
 

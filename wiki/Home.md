@@ -19,9 +19,13 @@ for the pitch and quick install; this wiki goes deeper on setup and day-to-day c
 
 ## Quick facts
 
-- Four Swift files, one Swift Package executable, no Xcode project. `./build.sh` builds and
+- Five Swift files, one Swift Package executable, no Xcode project. `./build.sh` builds and
   ad-hoc-signs `build/MeetAlert.app`.
 - All state lives under `~/.config/meetalert/` — `config.json` (yours to edit) and `state.json`
-  (app-owned, tracks what's already alerted or ignored).
+  (app-owned, tracks what's already alerted, ignored, and the last morning-agenda date).
 - `MEETALERT_TEST=1` runs a fully headless self-test — no calendar access requested, no TCC
-  prompt — useful for verifying the ntfy/escalation pipeline without waiting for a real meeting.
+  prompt, always "present" (never away), single-urgent escalation, no overrun/agenda pushes —
+  useful for verifying the ntfy/escalation pipeline without waiting for a real meeting.
+- Multiple alerts per meeting, away-aware and repeating escalation, one-tap Join, meeting-overrun
+  warnings, and an optional morning agenda push are all covered on the
+  [Configuration](Configuration) page.

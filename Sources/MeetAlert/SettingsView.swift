@@ -4,15 +4,31 @@ import SwiftUI
 
 struct SettingsView: View {
     @Bindable var store: Store
+    @State private var alertMinutesText = ""
+    @FocusState private var alertMinutesFocused: Bool
+    @State private var testPushResult: String?
 
     var body: some View {
         Form {
             Section("Timing") {
-                Stepper("Alert \(store.config.leadMinutes) min before", value: $store.config.leadMinutes, in: 1...30)
-                Stepper("Late alert up to \(store.config.lateAlertMinutes) min after start",
+                TextField("Alert times (min before start; 0 = at start; negative = after)", text: $alertMinutesText)
+                    .focused($alertMinutesFocused)
+                    .onSubmit { commitAlertMinutes() }
+                Stepper("Fire missed alerts up to \(store.config.lateAlertMinutes) min late",
                         value: $store.config.lateAlertMinutes, in: 2...30)
                 Stepper("Escalate after \(store.config.escalationSeconds)s",
                         value: $store.config.escalationSeconds, in: 30...600, step: 30)
+                Stepper("Away after \(store.config.awayIdleSeconds)s idle",
+                        value: $store.config.awayIdleSeconds, in: 60...600, step: 30)
+                Stepper("Travel lead \(store.config.travelLeadMinutes) min",
+                        value: $store.config.travelLeadMinutes, in: 10...120, step: 5)
+                Toggle("Warn 2 min before a meeting ends", isOn: $store.config.endWarning)
+            }
+            Section("Morning agenda") {
+                Toggle("Send morning agenda", isOn: agendaEnabledBinding)
+                if let hour = store.config.agendaHour {
+                    Stepper("Send at \(hour):00", value: agendaHourBinding(hour), in: 0...23)
+                }
             }
             Section("Filters") {
                 Toggle("Ignore all-day events", isOn: $store.config.ignoreAllDay)
@@ -22,11 +38,28 @@ struct SettingsView: View {
             Section("ntfy") {
                 TextField("Server", text: $store.config.ntfyServer)
                 TextField("Topic", text: $store.config.ntfyTopic)
+                HStack {
+                    Button("Send test push") {
+                        Task {
+                            let ok = await store.sendTestPush()
+                            testPushResult = ok ? "sent ✓" : "failed ✗"
+                        }
+                    }
+                    if let testPushResult {
+                        Text(testPushResult).foregroundStyle(.secondary)
+                    }
+                }
             }
         }
         .padding(20)
         .frame(width: 420)
-        .onAppear { NSApp.activate(ignoringOtherApps: true) }
+        .onAppear {
+            alertMinutesText = formattedAlertMinutes
+            NSApp.activate(ignoringOtherApps: true)
+        }
+        .onChange(of: alertMinutesFocused) { _, focused in
+            if !focused { commitAlertMinutes() }
+        }
     }
 
     @ViewBuilder
@@ -42,7 +75,7 @@ struct SettingsView: View {
                     ForEach(group.calendars, id: \.calendarIdentifier) { cal in
                         Toggle(cal.title, isOn: Binding(
                             get: { isEnabled(cal) },
-                            set: { _ in toggle(cal, in: group.calendars) }
+                            set: { _ in toggle(cal) }
                         ))
                     }
                 }
@@ -55,8 +88,8 @@ struct SettingsView: View {
         return ids.contains(cal.calendarIdentifier)
     }
 
-    private func toggle(_ cal: EKCalendar, in calendars: [EKCalendar]) {
-        let allIds = calendars.map(\.calendarIdentifier)
+    private func toggle(_ cal: EKCalendar) {
+        let allIds = store.allCalendarIds()
         var ids = Set(store.config.calendarIds ?? allIds)
         if ids.contains(cal.calendarIdentifier) {
             ids.remove(cal.calendarIdentifier)
@@ -64,6 +97,32 @@ struct SettingsView: View {
             ids.insert(cal.calendarIdentifier)
         }
         store.config.calendarIds = (ids == Set(allIds)) ? nil : Array(ids)
+    }
+
+    private var formattedAlertMinutes: String {
+        store.config.alertMinutesBefore.map(String.init).joined(separator: ", ")
+    }
+
+    /// Commits on Enter or on losing focus — not per keystroke, so typing "-" or "," along the way
+    /// (e.g. building up "-5") never gets silently eaten mid-edit. Unparseable/empty input reverts
+    /// the field to whatever's currently in config rather than clobbering it.
+    private func commitAlertMinutes() {
+        let mins = alertMinutesText.split(separator: ",").compactMap { Int($0.trimmingCharacters(in: .whitespaces)) }
+        if !mins.isEmpty {
+            store.config.alertMinutesBefore = Store.Config.normalized(mins)
+        }
+        alertMinutesText = formattedAlertMinutes
+    }
+
+    private var agendaEnabledBinding: Binding<Bool> {
+        Binding(
+            get: { store.config.agendaHour != nil },
+            set: { on in store.config.agendaHour = on ? (store.config.agendaHour ?? 7) : nil }
+        )
+    }
+
+    private func agendaHourBinding(_ hour: Int) -> Binding<Int> {
+        Binding(get: { hour }, set: { store.config.agendaHour = $0 })
     }
 
     private var keywordsBinding: Binding<String> {
