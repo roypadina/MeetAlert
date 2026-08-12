@@ -1,6 +1,14 @@
 import AppKit
 import SwiftUI
 
+/// A borderless nonactivating NSPanel can never become key by default, which silently kills the
+/// Return-key shortcut on its Dismiss button. Overriding canBecomeKey fixes that WITHOUT calling
+/// makeKey/makeKeyAndOrderFront ourselves — no focus stealing, no activating the app. Return only
+/// starts working once the user has already clicked into the panel.
+private final class KeyablePanel: NSPanel {
+    override var canBecomeKey: Bool { true }
+}
+
 /// Floating, non-activating panel that stays up until the user acts on it.
 /// Multiple panels stack vertically; dismissing one closes the gap for the ones below it.
 @MainActor
@@ -20,7 +28,16 @@ enum AlertPanel {
             existing.panel.orderFrontRegardless()  // already showing (e.g. re-tick) — don't stack a duplicate
             return
         }
-        guard let screen = screenUnderMouse() else { return }
+        // No screen at all (e.g. woke from sleep with displays not yet re-attached) — the alertKey
+        // is already marked fired, so dropping the panel here would lose the alert for good. Retry
+        // instead of un-marking anything; it self-heals once a display shows up.
+        guard let screen = screenUnderMouse() else {
+            Task { @MainActor in
+                try? await Task.sleep(for: .seconds(30))
+                show(m, alertKey: alertKey, onAck: onAck, onSnooze: onSnooze, onSnoozeStart: onSnoozeStart, onIgnore: onIgnore)
+            }
+            return
+        }
         let panel = makePanel()
 
         func closeThen(_ action: @escaping () -> Void) {
@@ -53,7 +70,13 @@ enum AlertPanel {
             existing.panel.orderFrontRegardless()
             return
         }
-        guard let screen = screenUnderMouse() else { return }
+        guard let screen = screenUnderMouse() else {
+            Task { @MainActor in
+                try? await Task.sleep(for: .seconds(30))
+                showOverrun(key: key, title: title, subtitle: subtitle, onDismiss: onDismiss)
+            }
+            return
+        }
         let panel = makePanel()
 
         func closeThen(_ action: @escaping () -> Void) {
@@ -81,7 +104,7 @@ enum AlertPanel {
     }
 
     private static func makePanel() -> NSPanel {
-        let panel = NSPanel(
+        let panel = KeyablePanel(
             contentRect: NSRect(x: 0, y: 0, width: width, height: height),
             styleMask: [.nonactivatingPanel, .borderless],
             backing: .buffered,
@@ -122,7 +145,7 @@ enum AlertPanel {
 
     private static func screenUnderMouse() -> NSScreen? {
         let location = NSEvent.mouseLocation
-        return NSScreen.screens.first { $0.frame.contains(location) } ?? NSScreen.main
+        return NSScreen.screens.first { $0.frame.contains(location) } ?? NSScreen.main ?? NSScreen.screens.first
     }
 
     /// Clamps to the last fully-visible slot on this screen — beyond that, extra panels overlap the

@@ -95,3 +95,11 @@ Any ntfy-compatible server works — set `ntfyServer` to its base URL (e.g.
 `https://ntfy.example.com`). See [docs.ntfy.sh/install](https://docs.ntfy.sh/install/) for
 running your own. Self-hosting also gets you actual topic access control instead of
 security-by-obscurity.
+
+**Keep message caching enabled** (`cache-duration` in `server.yml` — the default is on). MeetAlert
+detects an ACK or snooze by *polling the topic's message history*
+(`GET /<topic>/json?poll=1&since=...`); with `cache-duration: 0` there's no history to poll at
+all, so a real ACK is invisible to MeetAlert and it escalates the full 3 times regardless of
+whether you actually tapped ACK. This is the single most common self-hosting misconfiguration for
+MeetAlert specifically — public `ntfy.sh` caches by default, so this only bites self-hosters who
+turned caching off.

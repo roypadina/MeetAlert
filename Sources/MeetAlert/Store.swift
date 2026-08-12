@@ -5,12 +5,18 @@ import Foundation
 import Observation
 import ServiceManagement
 
-// Private API, no public header — declare the symbol ourselves. Used to detect screen lock.
-@_silgen_name("CGSessionCopyCurrentDictionary")
-private func CGSessionCopyCurrentDictionary() -> CFDictionary?
+// Private API, no public header. @_silgen_name would hard-link the symbol at load time — if it
+// ever vanishes from a future macOS, the WHOLE APP fails to launch. Resolve it lazily via dlsym
+// instead: missing symbol just means isAway() falls back to idle-only (screen lock untestable).
+private typealias CGSessionCopyCurrentDictionaryFn = @convention(c) () -> CFDictionary?
+private let cgSessionCopyCurrentDictionary: CGSessionCopyCurrentDictionaryFn? = {
+    guard let sym = dlsym(UnsafeMutableRawPointer(bitPattern: -2), "CGSessionCopyCurrentDictionary") else { return nil }
+    return unsafeBitCast(sym, to: CGSessionCopyCurrentDictionaryFn.self)
+}()
 
 private func isScreenLocked() -> Bool {
-    guard let session = CGSessionCopyCurrentDictionary() as? [String: Any] else { return false }
+    guard let fn = cgSessionCopyCurrentDictionary,
+          let session = fn() as? [String: Any] else { return false }
     return (session["CGSSessionScreenIsLocked"] as? Bool) ?? false
 }
 
@@ -139,6 +145,7 @@ final class Store {
     private var timer: Timer?
     private var accessResolved = false  // true once requestFullAccessToEvents has completed (either way)
     private var agendaSending = false  // in-flight guard: a publish slower than one 30s tick must not double-send
+    private var activityToken: NSObjectProtocol?  // held for the app's lifetime so App Nap doesn't stall the timer
 
     /// Earliest snooze-until date across every offset of a meeting occurrence — for the menu's
     /// "Snoozed:" row, which only knows the meeting key, not which offset(s) are snoozed.
@@ -154,12 +161,19 @@ final class Store {
         timer = Timer.scheduledTimer(withTimeInterval: 30, repeats: true) { [weak self] _ in
             Task { @MainActor in self?.tick() }
         }
+        timer?.tolerance = 5  // let the system coalesce/defer slightly under App Nap instead of waking exactly on time
+        activityToken = ProcessInfo.processInfo.beginActivity(options: [.userInitiatedAllowingIdleSystemSleep], reason: "meeting alert scheduling")
         if testMode {
             scheduleTestMeeting()
             return
         }
-        if SMAppService.mainApp.status != .enabled {
-            try? SMAppService.mainApp.register()  // launch at login
+        // Register for login exactly once, ever — re-checking `.enabled` on every launch meant a
+        // user who removed it via System Settings got it silently re-added on the next launch.
+        if !UserDefaults.standard.bool(forKey: "didRegisterLoginItem") {
+            UserDefaults.standard.set(true, forKey: "didRegisterLoginItem")
+            if SMAppService.mainApp.status != .enabled {
+                try? SMAppService.mainApp.register()
+            }
         }
         Task { await requestAccessAndTick() }
         NotificationCenter.default.addObserver(forName: .EKEventStoreChanged, object: nil, queue: .main) { [weak self] _ in
@@ -204,7 +218,10 @@ final class Store {
         let visible = list.filter { $0.end > now }
         upcomingList = Array(visible.prefix(4))
         let warningPrefix = (calendarSelectionBroken || lastPushFailed) ? "⚠︎ " : ""
-        menuBarText = calendarAccessDenied ? "⚠︎ no calendar access" : warningPrefix + menuBarTextFor(visible, now: now)
+        let noCalendarsSelected = config.calendarIds?.isEmpty == true
+        menuBarText = calendarAccessDenied ? "⚠︎ no calendar access"
+            : noCalendarsSelected ? "no calendars selected"
+            : warningPrefix + menuBarTextFor(visible, now: now)
 
         for m in list {
             for offset in offsets(for: m) {
@@ -357,15 +374,22 @@ final class Store {
     private func fetchMeetings(from start: Date, to end: Date) -> [Meeting] {
         let calendars: [EKCalendar]?
         if let ids = config.calendarIds {
-            let resolved = ekStore.calendars(for: .event).filter { ids.contains($0.calendarIdentifier) }
-            if resolved.isEmpty {
-                // Saved selection matches nothing real anymore (e.g. account re-added, identifiers
-                // rotated) — fall back to every calendar instead of silently going dead.
-                calendarSelectionBroken = true
-                calendars = nil
-            } else {
+            if ids.isEmpty {
+                // calendarIds == [] is a DELIBERATE "watch nothing" (every toggle unticked) — not
+                // the same as a stale/rotated selection. No fallback, no broken warning.
                 calendarSelectionBroken = false
-                calendars = resolved
+                calendars = []
+            } else {
+                let resolved = ekStore.calendars(for: .event).filter { ids.contains($0.calendarIdentifier) }
+                if resolved.isEmpty {
+                    // Non-empty selection matches nothing real anymore (e.g. account re-added,
+                    // identifiers rotated) — fall back to every calendar instead of going dead.
+                    calendarSelectionBroken = true
+                    calendars = nil
+                } else {
+                    calendarSelectionBroken = false
+                    calendars = resolved  // partial resolve is fine — just use what matched
+                }
             }
         } else {
             calendarSelectionBroken = false
@@ -473,6 +497,7 @@ final class Store {
         let maxUrgent = testMode ? 1 : 3  // repeating escalation, bounded
         let hardDeadline = m.start.addingTimeInterval(15 * 60)  // never escalate past this regardless of offset
         escalationTasks[alertKey] = Task {
+            defer { Task { @MainActor in self.escalationTasks.removeValue(forKey: alertKey) } }
             for _ in 0..<maxUrgent {
                 let deadline = min(Date().addingTimeInterval(Double(testMode ? 20 : cfg.escalationSeconds)), hardDeadline)
                 guard deadline > Date() else { break }
@@ -580,13 +605,22 @@ final class Store {
 
     private func saveState() {
         let cutoff = Date().addingTimeInterval(-24 * 3600)
-        persisted.alertedKeys = persisted.alertedKeys.filter { key in
+        persisted.alertedKeys = Self.pruneOlderThan(persisted.alertedKeys, cutoff: cutoff)
+        persisted.ignoredKeys = Self.pruneOlderThan(persisted.ignoredKeys, cutoff: cutoff)
+        persisted.snoozedUntil = persisted.snoozedUntil.filter { $0.value >= cutoff }
+        guard let data = try? JSONEncoder().encode(persisted) else { return }
+        try? data.write(to: Self.stateURL, options: .atomic)
+    }
+
+    /// Drops keys whose embedded epoch (the segment between the last "|" and an optional "@") is
+    /// older than `cutoff`. Shared by alertedKeys (epoch@offset) and ignoredKeys (epoch, no
+    /// suffix) — once an occurrence's specific epoch is a day old it'll never recur, so there's
+    /// nothing left for either set to protect by keeping the key around forever.
+    private static func pruneOlderThan(_ keys: Set<String>, cutoff: Date) -> Set<String> {
+        keys.filter { key in
             guard let last = key.split(separator: "|").last,
                   let epoch = Double(last.split(separator: "@").first ?? last) else { return true }
             return epoch >= cutoff.timeIntervalSince1970
         }
-        persisted.snoozedUntil = persisted.snoozedUntil.filter { $0.value >= cutoff }
-        guard let data = try? JSONEncoder().encode(persisted) else { return }
-        try? data.write(to: Self.stateURL, options: .atomic)
     }
 }

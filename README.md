@@ -69,11 +69,11 @@ brew install --cask meetalert
 > ```
 
 On first launch macOS will prompt for **Calendar** access — MeetAlert can't see your meetings
-without it. It also registers itself to **start at login** automatically every launch — there's
-no in-app setting to opt out. To stop it, quit MeetAlert via the menu's **Quit** and don't reopen
-it (on top of removing it in **System Settings → General → Login Items & Extensions**) — see the
-[Installation wiki page](https://github.com/roypadina/MeetAlert/wiki/Installation) for why simply
-relaunching can re-register it.
+without it. It also registers itself to **start at login** automatically, but only on the very
+first launch ever — remove it later via **System Settings → General → Login Items &
+Extensions** and it stays removed; MeetAlert won't silently re-add it on a later launch. See the
+[Installation wiki page](https://github.com/roypadina/MeetAlert/wiki/Installation) if you ever
+want it back.
 
 ### Build from source
 
@@ -110,7 +110,10 @@ No Xcode project — it's a plain Swift Package executable.
    Disturb" toggle; iOS's Focus-mode bypass is a known ntfy limitation, so also allow the ntfy
    app explicitly under Focus mode settings as a backstop).
 
-Self-hosted ntfy servers work the same way — just set `ntfyServer` to your own instance.
+Self-hosted ntfy servers work the same way — just set `ntfyServer` to your own instance. **Keep
+message caching enabled on the server** (the default) — with `cache-duration: 0`, there's no
+message history left to poll, so MeetAlert can never see an ACK/snooze reply and escalates the
+full 3 times regardless of whether you actually acked.
 
 ## How it works
 
@@ -149,7 +152,7 @@ raw file editing.
 | `ignoreKeywords` | `[]` | Case-insensitive substrings — any event title containing one is skipped. |
 | `ntfyServer` | `"https://ntfy.sh"` | Base URL of your ntfy server. |
 | `ntfyTopic` | `""` (empty) | Your private ntfy topic. **Empty means phone push is off** — desktop popups still work, nothing goes to your phone. See [ntfy setup](#ntfy-setup). |
-| `calendarIds` | `null` | `null` = every calendar. Otherwise a list of calendar identifiers — set this via the Settings checklist, not by hand. |
+| `calendarIds` | `null` | `null` = every calendar. `[]` (untick every calendar in Settings) = watch **nothing**, on purpose — menu bar shows "no calendars selected". A non-empty list that matches zero live calendars (e.g. an account was re-added and identifiers rotated) is treated as **stale**, not deliberate: MeetAlert falls back to every calendar and shows a ⚠︎ warning instead of going silently dead. |
 
 Declined invites are always skipped — there's no config knob for it.
 

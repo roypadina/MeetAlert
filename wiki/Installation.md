@@ -53,13 +53,19 @@ Security → Calendars → MeetAlert**, then relaunch.
 
 ## Login item
 
-MeetAlert registers itself to **start at login** automatically via `SMAppService` — there's no
-in-app setting to opt out yet. The check is unconditional: every normal-mode launch, if the
-login item's status isn't `.enabled`, MeetAlert calls `register()` again.
+MeetAlert registers itself to **start at login** automatically via `SMAppService` — but only
+**once, ever**. The very first launch sets a flag (`didRegisterLoginItem`, stored in
+`~/Library/Preferences/com.roy.meetalert.plist`) and calls `register()`; every launch after that
+skips the check entirely, regardless of what the login item's actual status is.
 
-If you turn it off via **System Settings → General → Login Items & Extensions**, that's the
-right place to do it — but note MeetAlert doesn't currently distinguish "never registered" from
-"you explicitly disabled it," so if macOS reports a disabled item's status as anything other
-than `.enabled` (which is the expected case), simply *launching MeetAlert again* could
-re-register it. If you want it gone for good, quitting via the menu's **Quit** and not
-reopening it is the more reliable way to keep it off, on top of the System Settings toggle.
+**Removing it:** turn it off via **System Settings → General → Login Items & Extensions** — it
+stays off. MeetAlert never re-checks the login item's status after that first-ever registration,
+so a later launch can't silently re-add it.
+
+**Re-enabling it:** delete the flag and relaunch:
+
+```bash
+defaults delete com.roy.meetalert didRegisterLoginItem
+```
+
+The next launch registers it again, exactly like a fresh install.

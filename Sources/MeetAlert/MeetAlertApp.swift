@@ -28,7 +28,7 @@ private struct MenuContent: View {
 
     var body: some View {
         if store.upcomingList.isEmpty {
-            Text("No meetings in the next 2h")
+            Text("No upcoming meetings")
         }
         ForEach(store.upcomingList) { m in
             Text("\(m.start.formatted(date: .omitted, time: .shortened))  \(m.title)")

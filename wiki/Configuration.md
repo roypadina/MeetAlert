@@ -22,7 +22,7 @@ MeetAlert stores everything under `~/.config/meetalert/`:
 | `ignoreKeywords` | [String] | `[]` | Case-insensitive substring match against the event title; any match skips the event. |
 | `ntfyServer` | String | `"https://ntfy.sh"` | Base URL of your ntfy server. |
 | `ntfyTopic` | String | `""` (empty) | Your private ntfy topic. **Empty means phone push is off entirely** — desktop popups still fire, nothing goes to your phone or gets escalated. See [ntfy Setup](ntfy-Setup). |
-| `calendarIds` | [String]? | `null` | `null` watches every calendar. A list of EventKit calendar identifiers restricts MeetAlert to just those — set this from the Settings **Calendars** checklist rather than typing identifiers by hand. |
+| `calendarIds` | [String]? | `null` | `null` watches every calendar. A non-empty list of EventKit calendar identifiers restricts MeetAlert to just those — set this from the Settings **Calendars** checklist rather than typing identifiers by hand. `[]` (every calendar unticked) means **watch nothing, deliberately** — menu bar shows "no calendars selected", no fallback, no warning. A non-empty list that resolves to zero *live* calendars is different: that's treated as **stale** (e.g. an account was re-added and identifiers rotated), so MeetAlert falls back to every calendar and raises the ⚠︎ warning instead of going silently dead. A partial match (some ids resolve, some don't) just uses whatever matched, no warning. |
 
 Declined invites (events where you're a participant marked `.declined`) are always filtered out
 — there's no config field for it.
@@ -77,8 +77,9 @@ alerts independently. The overrun warning reuses the same set with a literal `@e
   whose embedded epoch is more than 24 hours old is dropped the next time state is saved. You
   generally never need to touch this.
 - **`ignoredKeys`** — occurrences you've told MeetAlert to skip via "Ignore forever" (menu or
-  popup button) — this ignores *all* of that occurrence's offsets. **Not** pruned by age —
-  permanent until removed.
+  popup button) — this ignores *all* of that occurrence's offsets. Pruned the same way as
+  `alertedKeys` (entries whose embedded epoch is more than 24 hours old are dropped) — a specific
+  occurrence's epoch never recurs, so keeping the key past that point protects nothing.
 - **`snoozedUntil`** — alertKey → the date/time to re-show that alert's popup. Persisted so a
   snooze survives a restart or a crash instead of silently turning into a missed meeting. Pruned
   the same way as `alertedKeys` (entries more than 24 hours old are dropped).

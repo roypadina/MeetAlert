@@ -6,7 +6,12 @@ Work through these in order:
 
 1. **Is the calendar it's on actually enabled?** Menu bar icon → **Settings…** → **Calendars**
    — an unticked calendar is completely invisible to MeetAlert (`calendarIds` excludes it from
-   the EventKit query, not just from the UI).
+   the EventKit query, not just from the UI). If you've unticked **every** calendar, that's
+   respected as deliberate — the menu bar says "no calendars selected" and nothing fires, on
+   purpose. That's different from a *stale* selection (e.g. after re-adding an account, whose
+   calendar identifiers changed): MeetAlert detects when a saved selection matches zero real
+   calendars and falls back to watching everything with a ⚠︎ warning, rather than going quietly
+   dead — if you're seeing that warning, re-open Settings → Calendars and re-tick what you want.
 2. **Is it within an alert window?** Each entry in `alertMinutesBefore` (plus a `travelLeadMinutes`
    window if the meeting has a physical location) opens its own window, from that offset until
    `lateAlertMinutes` after it. A meeting 2 hours out won't alert yet; with the default
@@ -38,6 +43,14 @@ meeting's start time, regardless of `escalationSeconds`. Both bounds are fixed, 
 If an alert itself first fired *later* than that 15-minute mark (e.g. a very late offset, or a
 missed alert caught up via `lateAlertMinutes`), there's no escalation window left at all by the
 time it fires — you'll get exactly one push and no re-pushes, which is correct, not a bug.
+
+## I acked/snoozed from my phone but it escalated 3 times anyway (self-hosted ntfy)
+
+Check your server's `cache-duration` setting. MeetAlert detects an ACK/snooze by polling the
+topic's message history — if your self-hosted server has caching disabled
+(`cache-duration: 0`), there's no history for it to poll, so your reply is invisible to MeetAlert
+even though ntfy delivered it to your phone fine. Turn message caching back on (it's the default);
+see [ntfy Setup](ntfy-Setup#self-hosting). Public `ntfy.sh` isn't affected — it caches by default.
 
 ## The 2-minute overrun popup, or the morning agenda push, never shows up
 

@@ -61,6 +61,7 @@ enum Ntfy {
         let url: String
         var method: String? = nil
         var body: String? = nil
+        var headers: [String: String]? = nil
     }
 
     private struct Publish: Encodable {
@@ -72,12 +73,19 @@ enum Ntfy {
         var actions: [Action]?
     }
 
+    // The ACK/Snooze taps themselves POST to the topic, which ntfy echoes back as a new
+    // notification to every subscriber (including the phone that just tapped). These headers ride
+    // along on THAT outgoing request to keep the echo silent instead of a second full-priority ping.
+    private static let echoSilencingHeaders = ["X-Priority": "min", "X-Tags": "wastebasket"]
+
     private static func ackAction(token: String, cfg: Store.Config) -> Action {
-        Action(action: "http", label: "ACK", url: "\(cfg.ntfyServer)/\(cfg.ntfyTopic)", method: "POST", body: "meetack \(token)")
+        Action(action: "http", label: "ACK", url: "\(cfg.ntfyServer)/\(cfg.ntfyTopic)", method: "POST",
+               body: "meetack \(token)", headers: echoSilencingHeaders)
     }
 
     private static func snoozeAction(token: String, cfg: Store.Config) -> Action {
-        Action(action: "http", label: "Snooze 5m", url: "\(cfg.ntfyServer)/\(cfg.ntfyTopic)", method: "POST", body: "meetsnooze \(token)")
+        Action(action: "http", label: "Snooze 5m", url: "\(cfg.ntfyServer)/\(cfg.ntfyTopic)", method: "POST",
+               body: "meetsnooze \(token)", headers: echoSilencingHeaders)
     }
 
     private static func joinAction(_ url: URL) -> Action {
