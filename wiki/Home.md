@@ -24,8 +24,8 @@ for the pitch and quick install; this wiki goes deeper on setup and day-to-day c
 - All state lives under `~/.config/meetalert/` — `config.json` (yours to edit) and `state.json`
   (app-owned, tracks what's already alerted, ignored, and the last morning-agenda date).
 - `MEETALERT_TEST=1` runs a fully headless self-test — no calendar access requested, no TCC
-  prompt, always "present" (never away), single-urgent escalation, no overrun/agenda pushes —
+  prompt, always "present" (never away), single-urgent escalation, no agenda push —
   useful for verifying the ntfy/escalation pipeline without waiting for a real meeting.
-- Multiple alerts per meeting, away-aware and repeating escalation, one-tap Join, meeting-overrun
-  warnings, and an optional morning agenda push are all covered on the
+- Multiple alerts per meeting, away-aware and repeating escalation, one-tap Join, and an
+  optional morning agenda push are all covered on the
   [Configuration](Configuration) page.

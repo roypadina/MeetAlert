@@ -29,7 +29,7 @@ stops being an excuse.
 - [Configuration](#configuration)
 - [Filtering / ignoring events](#filtering--ignoring-events)
 - [Joining a meeting](#joining-a-meeting)
-- [Meeting overrun & morning agenda](#meeting-overrun--morning-agenda)
+- [Morning agenda](#morning-agenda)
 - [Testing](#testing)
 - [Google Calendar (and any other calendar)](#google-calendar-and-any-other-calendar)
 - [Support](#support)
@@ -43,7 +43,6 @@ stops being an excuse.
 - **Phone push via [ntfy](https://ntfy.sh)** at the same moment, with tappable **ACK**, **Join**, and **Snooze 5m** actions.
 - **Away-aware escalation** — idle past a threshold or screen-locked, and the first push already goes out at urgent priority instead of waiting on a grace window nobody at the desk would see.
 - **Repeating urgent escalation** — up to 3 re-pushes (never past 15 minutes after the meeting starts) until you ack or snooze, not just one.
-- **Meeting-overrun warning** — a Mac-only heads-up 2 minutes before a meeting ends, naming what's next.
 - **Morning agenda push** — an optional daily rundown of today's meetings and your largest free gap.
 - Reads **every calendar macOS syncs** — Google, iCloud, Exchange, CalDAV — with zero API setup, and skips meetings you've declined. See [below](#google-calendar-and-any-other-calendar).
 - **Travel-lead alerts** for meetings with a physical address — one extra early alert to account for getting there.
@@ -122,10 +121,10 @@ full 3 times regardless of whether you actually acked.
 | Each offset in `alertMinutesBefore` (before, at, or after start), plus one `travelLeadMinutes` offset for meetings with a physical address | Desktop popup appears on whichever screen your mouse is on, **and** an ntfy push goes out with **ACK**, **Join** (if there's a meeting link), and **Snooze 5m** actions. |
 | You're away from the Mac (idle past `awayIdleSeconds`, or the screen is locked) | That first push skips the high-priority grace window and goes straight out at **urgent** priority — nobody's at the desk to see the popup anyway. |
 | Several offsets of the same meeting come due in one scan (e.g. the event synced in late) | They collapse into **one** alert — the latest due one — instead of stacking popups. |
-| Anything up to escalation | Clicking **Dismiss**, **Join**, **Snooze**, **Till start**, or **Ignore forever** on the popup — or tapping **ACK** on the push — counts as acknowledged; escalation stops. Tapping **Snooze 5m** on the push snoozes it (clamped to the meeting's start) and also stops escalation. Tapping **Join** on the *push* only opens the meeting — it does **not** ack (that action never reports back to MeetAlert); the desktop popup's Join button does both. |
+| Anything up to escalation | Clicking **Dismiss**, **Join**, **Snooze**, **Till start**, or **Ignore forever** on the popup — or tapping **ACK** on the push — counts as acknowledged; escalation stops. Tapping **Snooze 5m** on the push snoozes it (clamped to the meeting's start) and also stops escalation. Tapping **ACK** or **Snooze 5m** on the push also clears that notification from the phone (which stops any insistent ringing). Tapping **Join** on the *push* only opens the meeting — it does **not** ack (that action never reports back to MeetAlert); the desktop popup's Join button does both. |
+| **Dismiss**/**ACK**/**Join** on any of a meeting's alerts | That whole meeting occurrence is done: every remaining offset (including a not-yet-fired travel-lead or at-start alert) is suppressed, and any pending snooze for it is dropped. Snoozing, by contrast, only quiets that one alert until the snooze comes due. |
 | `escalationSeconds` after an unacked alert, repeating | The push resends at **urgent** priority (`rotating_light` tag) — up to **3 times**, and never past **15 minutes** after the meeting's start. If an alert itself first fires later than that (e.g. a very late offset), there's no escalation window left at all — just the one initial push. |
 | Up to `lateAlertMinutes` after an offset's scheduled time | MeetAlert still fires that alert even if it only *saw* the event this late — covers sync lag between Google/Exchange and macOS's local calendar cache. |
-| 2 minutes before a meeting ends (`endWarning`) | A Mac-only popup — no ntfy, no escalation — warns you it's ending, and names what starts within the next hour (or that nothing does). |
 | Once a day, at or after `agendaHour` (if set) | A single ntfy push (default priority, no actions) summarizes today's meetings and your largest free gap. |
 
 Each offset of a meeting occurrence alerts once (tracked in `state.json`); a snooze that comes
@@ -146,7 +145,6 @@ raw file editing.
 | `escalationSeconds` | `120` | Seconds between each escalation re-push (up to 3, and never past 15 minutes after the meeting's start). |
 | `awayIdleSeconds` | `120` | Idle time (or an immediate screen lock) before MeetAlert treats you as away and sends the first push at urgent priority instead of high. |
 | `travelLeadMinutes` | `30` | Extra early alert for meetings with a physical (non-video-call) location. |
-| `endWarning` | `true` | Mac-only popup 2 minutes before a meeting ends. |
 | `agendaHour` | `null` | Hour of day (0–23, local time) to push today's agenda. `null` = off. |
 | `ignoreAllDay` | `true` | Skip all-day events entirely. |
 | `ignoreKeywords` | `[]` | Case-insensitive substrings — any event title containing one is skipped. |
@@ -181,11 +179,8 @@ link *and* acks in one step, same as Dismiss. On the **phone push**, Join only o
 it can't ack, since that kind of action never reports back to MeetAlert; use the **ACK** button
 on the push if you want to ack from your phone.
 
-## Meeting overrun & morning agenda
+## Morning agenda
 
-- **Overrun warning** (`endWarning`, on by default) — 2 minutes before a meeting ends, a
-  Mac-only popup (no phone push, no escalation) tells you it's wrapping up and names whatever
-  starts within the next hour, or that nothing does.
 - **Morning agenda** (`agendaHour`, off by default) — set an hour in Settings or `config.json`
   and MeetAlert pushes a single ntfy summary once a day: how many meetings, the first one, up
   to 6 upcoming, and your largest free gap before 7pm.
@@ -212,8 +207,8 @@ via `open`) so the bundle's `Info.plist`/`LSUIElement` context is intact and std
 attached to your terminal.
 
 Test mode forces a few things for determinism: you're always treated as "present" (never away),
-the escalation loop caps at a single urgent resend instead of three, and both the meeting-overrun
-warning and the morning-agenda push are skipped entirely.
+the escalation loop caps at a single urgent resend instead of three, and the morning-agenda push
+is skipped entirely.
 
 ## Google Calendar (and any other calendar)
 

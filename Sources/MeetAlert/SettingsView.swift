@@ -22,7 +22,6 @@ struct SettingsView: View {
                         value: $store.config.awayIdleSeconds, in: 60...600, step: 30)
                 Stepper("Travel lead \(store.config.travelLeadMinutes) min",
                         value: $store.config.travelLeadMinutes, in: 10...120, step: 5)
-                Toggle("Warn 2 min before a meeting ends", isOn: $store.config.endWarning)
             }
             Section("Morning agenda") {
                 Toggle("Send morning agenda", isOn: agendaEnabledBinding)

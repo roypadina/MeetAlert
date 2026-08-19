@@ -38,7 +38,6 @@ final class Store {
         var escalationSeconds = 120
         var awayIdleSeconds = 120  // idle (or screen-locked) this long → treat as away from the Mac
         var travelLeadMinutes = 30  // extra alert offset for meetings with a physical location
-        var endWarning = true  // Mac-only popup 2 min before a meeting ends
         var agendaHour: Int? = nil  // hour of day to push today's agenda; nil = off
         var ignoreAllDay = true
         var ignoreKeywords: [String] = []
@@ -48,7 +47,7 @@ final class Store {
 
         private enum CodingKeys: String, CodingKey {
             case alertMinutesBefore, lateAlertMinutes, escalationSeconds, awayIdleSeconds, travelLeadMinutes,
-                 endWarning, agendaHour, ignoreAllDay, ignoreKeywords, ntfyServer, ntfyTopic, calendarIds
+                 agendaHour, ignoreAllDay, ignoreKeywords, ntfyServer, ntfyTopic, calendarIds
             case leadMinutes  // legacy key, migrated in init(from:) below
         }
 
@@ -70,7 +69,6 @@ final class Store {
             escalationSeconds = try c.decodeIfPresent(Int.self, forKey: .escalationSeconds) ?? 120
             awayIdleSeconds = try c.decodeIfPresent(Int.self, forKey: .awayIdleSeconds) ?? 120
             travelLeadMinutes = try c.decodeIfPresent(Int.self, forKey: .travelLeadMinutes) ?? 30
-            endWarning = try c.decodeIfPresent(Bool.self, forKey: .endWarning) ?? true
             agendaHour = try c.decodeIfPresent(Int.self, forKey: .agendaHour)
             ignoreAllDay = try c.decodeIfPresent(Bool.self, forKey: .ignoreAllDay) ?? true
             ignoreKeywords = try c.decodeIfPresent([String].self, forKey: .ignoreKeywords) ?? []
@@ -94,7 +92,6 @@ final class Store {
             try c.encode(escalationSeconds, forKey: .escalationSeconds)
             try c.encode(awayIdleSeconds, forKey: .awayIdleSeconds)
             try c.encode(travelLeadMinutes, forKey: .travelLeadMinutes)
-            try c.encode(endWarning, forKey: .endWarning)
             try c.encode(agendaHour, forKey: .agendaHour)
             try c.encode(ignoreAllDay, forKey: .ignoreAllDay)
             try c.encode(ignoreKeywords, forKey: .ignoreKeywords)
@@ -233,24 +230,8 @@ final class Store {
                 }
             }
             fireDueOffsets(m, now: now)
-            checkOverrun(m, now: now, allMeetings: list)
         }
         sendMorningAgenda()
-    }
-
-    /// Mac-only, no ntfy, no escalation: a heads-up 2 minutes before a meeting ends. Fires once
-    /// (alertedKeys key "<meeting>@end"), skipped entirely in test mode.
-    private func checkOverrun(_ m: Meeting, now: Date, allMeetings: [Meeting]) {
-        guard config.endWarning, !testMode else { return }
-        let key = "\(m.key)@end"
-        guard !persisted.alertedKeys.contains(key) else { return }
-        let warnAt = m.end.addingTimeInterval(-2 * 60)
-        guard now >= warnAt, now <= m.end else { return }
-        persisted.alertedKeys.insert(key)
-        saveState()
-        let next = allMeetings.first { $0.start > m.end && $0.start.timeIntervalSince(m.end) <= 3600 }
-        let subtitle = next.map { "next: \($0.start.formatted(date: .omitted, time: .shortened)) \($0.title)" } ?? "no meeting right after"
-        AlertPanel.showOverrun(key: key, title: "\(m.title) ends in 2m", subtitle: subtitle, onDismiss: {})
     }
 
     /// Once a day, at or after agendaHour, push today's remaining schedule via ntfy (default priority,
@@ -322,6 +303,8 @@ final class Store {
     /// collapse into ONE alert — the latest alertTime — with ALL their keys marked fired so the
     /// earlier ones never fire separately.
     private func fireDueOffsets(_ m: Meeting, now: Date) {
+        // Dismissed/ACKed once → done with this occurrence entirely; no other offset fires.
+        guard !persisted.alertedKeys.contains("\(m.key)@dismissed") else { return }
         // If a later-or-equal offset already fired (e.g. the user just added an earlier offset, or
         // a travel-lead offset, to a meeting that already alerted), don't insta-fire the earlier one
         // as "catch-up" — that already-passed alert is noise, not a missed alert.
@@ -540,15 +523,28 @@ final class Store {
         return ok
     }
 
-    func ack(_ key: String) {
+    /// Cancels escalation and closes the desktop panel for one alertKey. Shared by ack (final)
+    /// and snooze (alert comes back later), so it must NOT mark the occurrence dismissed itself.
+    private func stopAlert(_ key: String) {
         escalationTasks[key]?.cancel()
         escalationTasks.removeValue(forKey: key)
         AlertPanel.dismiss(key: key)  // a phone ACK/snooze closes the desktop panel too, not just escalation
         if testMode { emit("acked \(Self.hashToken(key))") }
     }
 
+    /// Dismiss/ACK (desktop button, phone ACK, or Join) = done with this meeting occurrence:
+    /// every remaining offset is suppressed and pending snoozes for it are dropped.
+    func ack(_ key: String) {
+        stopAlert(key)
+        guard let at = key.lastIndex(of: "@") else { return }
+        let meetingKey = String(key[..<at])
+        persisted.alertedKeys.insert("\(meetingKey)@dismissed")
+        persisted.snoozedUntil = persisted.snoozedUntil.filter { !$0.key.hasPrefix("\(meetingKey)@") }
+        saveState()
+    }
+
     func snooze(_ m: Meeting, alertKey: String, minutes: Int) {
-        ack(alertKey)  // snooze counts as ack
+        stopAlert(alertKey)
         let now = Date()
         let requested = now.addingTimeInterval(Double(minutes * 60))
         persisted.snoozedUntil[alertKey] = m.start > now ? min(requested, m.start) : requested  // never snooze past a not-yet-started meeting's start
@@ -556,8 +552,8 @@ final class Store {
     }
 
     func snoozeUntilStart(_ m: Meeting, alertKey: String) {
-        ack(alertKey)
-        guard m.start > Date() else { return }  // already started — "until start" would be the past; ack is enough
+        stopAlert(alertKey)
+        guard m.start > Date() else { return }  // already started — "until start" would be the past; stopping is enough
         persisted.snoozedUntil[alertKey] = m.start
         saveState()
     }
@@ -565,7 +561,7 @@ final class Store {
     func ignoreForever(_ key: String) {
         // escalationTasks is keyed per-offset ("key@offset") now, not per-meeting — cancel all of them.
         for alertKey in escalationTasks.keys.filter({ $0 == key || $0.hasPrefix("\(key)@") }) {
-            ack(alertKey)
+            stopAlert(alertKey)
         }
         persisted.ignoredKeys.insert(key)
         saveState()

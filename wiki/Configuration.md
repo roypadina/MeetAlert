@@ -16,7 +16,6 @@ MeetAlert stores everything under `~/.config/meetalert/`:
 | `escalationSeconds` | Int | `120` | Seconds between each escalation re-push. Escalation repeats up to 3 times, and never continues past 15 minutes after the meeting's start regardless of `escalationSeconds`. If an alert itself first fires later than that 15-minute mark, there's no escalation window left at all — just the one initial push, no re-pushes. |
 | `awayIdleSeconds` | Int | `120` | Seconds of idle time (mouse/keyboard) — or an immediately-detected screen lock — before MeetAlert treats you as away from the Mac. Away changes only the *first* push: it goes out at urgent priority right away instead of high priority with a grace window. |
 | `travelLeadMinutes` | Int | `30` | An extra alert offset added automatically for meetings whose `location` field is a physical address rather than a video-call link (i.e. non-empty and containing no `://`). |
-| `endWarning` | Bool | `true` | Mac-only popup (no ntfy, no escalation) 2 minutes before a meeting ends, naming the next meeting if one starts within an hour. |
 | `agendaHour` | Int? | `null` | Hour of day (0–23, local time, `Calendar.current`) to push a one-time daily agenda summary via ntfy. `null` disables it. |
 | `ignoreAllDay` | Bool | `true` | Skip all-day events. |
 | `ignoreKeywords` | [String] | `[]` | Case-insensitive substring match against the event title; any match skips the event. |
@@ -40,7 +39,6 @@ and file edits are equivalent and interchangeable.
   "escalationSeconds": 180,
   "awayIdleSeconds": 180,
   "travelLeadMinutes": 30,
-  "endWarning": true,
   "agendaHour": 7,
   "ignoreAllDay": true,
   "ignoreKeywords": ["focus time", "lunch", "OOO"],
@@ -69,13 +67,14 @@ not the series.
 
 `alertedKeys` entries are shaped `"<identifier>|<epoch>@<offset>"` — one key per
 (meeting occurrence, `alertMinutesBefore`/`travelLeadMinutes` entry) pair, since each offset
-alerts independently. The overrun warning reuses the same set with a literal `@end` suffix
-(`"<identifier>|<epoch>@end"`) instead of a numeric offset.
+alerts independently. Dismissing/ACKing an alert additionally writes a literal `@dismissed`
+suffix (`"<identifier>|<epoch>@dismissed"`) instead of a numeric offset — that key suppresses
+*every* remaining offset of that occurrence, so a dismissed meeting never alerts again.
 
-- **`alertedKeys`** — every (meeting, offset) pair — plus every meeting whose overrun warning
-  already fired — that's already alerted, so none of it re-fires. Pruned automatically: any key
-  whose embedded epoch is more than 24 hours old is dropped the next time state is saved. You
-  generally never need to touch this.
+- **`alertedKeys`** — every (meeting, offset) pair that's already alerted — plus every occurrence
+  that's been dismissed outright (`@dismissed`) — so none of it re-fires. Pruned automatically:
+  any key whose embedded epoch is more than 24 hours old is dropped the next time state is saved.
+  You generally never need to touch this.
 - **`ignoredKeys`** — occurrences you've told MeetAlert to skip via "Ignore forever" (menu or
   popup button) — this ignores *all* of that occurrence's offsets. Pruned the same way as
   `alertedKeys` (entries whose embedded epoch is more than 24 hours old are dropped) — a specific

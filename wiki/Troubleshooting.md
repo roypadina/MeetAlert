@@ -52,17 +52,21 @@ topic's message history — if your self-hosted server has caching disabled
 even though ntfy delivered it to your phone fine. Turn message caching back on (it's the default);
 see [ntfy Setup](ntfy-Setup#self-hosting). Public `ntfy.sh` isn't affected — it caches by default.
 
-## The 2-minute overrun popup, or the morning agenda push, never shows up
+## The morning agenda push never shows up
 
-- Check `endWarning` (overrun) or `agendaHour` (agenda) in Settings/`config.json` — both are
-  off unless enabled (`endWarning` defaults **on**, `agendaHour` defaults **off**, `null`).
-- Both are skipped entirely under `MEETALERT_TEST=1`.
+- Check `agendaHour` in Settings/`config.json` — it defaults **off** (`null`).
+- It's skipped entirely under `MEETALERT_TEST=1`.
 - The agenda push only fires once its hour has passed for the day (`Calendar.current`'s local
   hour) and only once per calendar day — check `state.json`'s `lastAgendaDay`; if it already
   matches today, it already fired (or there were no meetings left to summarize) and won't again
   until tomorrow.
-- The overrun popup only fires once per meeting occurrence — check `alertedKeys` for a
-  `...@end` key if you're unsure whether it already fired.
+
+## A later alert never fired for a meeting I dismissed earlier
+
+Expected. Dismissing/ACKing (or Joining from) any of a meeting's alerts marks that whole
+occurrence done — every remaining offset is suppressed and pending snoozes are dropped
+(`alertedKeys` gets a `...@dismissed` key). Use **Snooze** instead of Dismiss if you want the
+alert back later.
 
 ## Menu bar icon is missing
 

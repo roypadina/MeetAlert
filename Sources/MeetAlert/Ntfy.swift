@@ -62,6 +62,7 @@ enum Ntfy {
         var method: String? = nil
         var body: String? = nil
         var headers: [String: String]? = nil
+        var clear: Bool? = nil  // remove the notification when the button is tapped (also stops insistent ringing)
     }
 
     private struct Publish: Encodable {
@@ -80,12 +81,12 @@ enum Ntfy {
 
     private static func ackAction(token: String, cfg: Store.Config) -> Action {
         Action(action: "http", label: "ACK", url: "\(cfg.ntfyServer)/\(cfg.ntfyTopic)", method: "POST",
-               body: "meetack \(token)", headers: echoSilencingHeaders)
+               body: "meetack \(token)", headers: echoSilencingHeaders, clear: true)
     }
 
     private static func snoozeAction(token: String, cfg: Store.Config) -> Action {
         Action(action: "http", label: "Snooze 5m", url: "\(cfg.ntfyServer)/\(cfg.ntfyTopic)", method: "POST",
-               body: "meetsnooze \(token)", headers: echoSilencingHeaders)
+               body: "meetsnooze \(token)", headers: echoSilencingHeaders, clear: true)
     }
 
     private static func joinAction(_ url: URL) -> Action {

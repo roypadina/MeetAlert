@@ -64,38 +64,6 @@ enum AlertPanel {
         NSSound(named: "Funk")?.play()
     }
 
-    /// Reduced-buttons variant for the meeting-overrun heads-up: Dismiss only, no ack/snooze/ignore.
-    static func showOverrun(key: String, title: String, subtitle: String, onDismiss: @escaping () -> Void) {
-        if let existing = active.first(where: { $0.key == key }) {
-            existing.panel.orderFrontRegardless()
-            return
-        }
-        guard let screen = screenUnderMouse() else {
-            Task { @MainActor in
-                try? await Task.sleep(for: .seconds(30))
-                showOverrun(key: key, title: title, subtitle: subtitle, onDismiss: onDismiss)
-            }
-            return
-        }
-        let panel = makePanel()
-
-        func closeThen(_ action: @escaping () -> Void) {
-            dismiss(panel)
-            action()
-        }
-
-        panel.contentView = NSHostingView(rootView: OverrunContent(
-            title: title, subtitle: subtitle,
-            onDismiss: { closeThen(onDismiss) }
-        ))
-
-        panel.setFrame(frame(forIndex: active.count, screen: screen), display: false)
-        panel.orderFrontRegardless()
-        active.append((key, panel))
-
-        NSSound(named: "Funk")?.play()
-    }
-
     /// Closes the panel for `key` if one is open — e.g. an ACK or snooze that arrived via the phone
     /// push, which previously stopped escalation but left the desktop panel sitting there forever.
     static func dismiss(key: String) {
@@ -189,28 +157,6 @@ private struct AlertContent: View {
                 }
                 Spacer()
                 Button("Ignore forever", action: onIgnore)
-                Button("Dismiss", action: onDismiss).keyboardShortcut(.defaultAction)
-            }
-        }
-        .padding(16)
-        .frame(width: 560, height: 140, alignment: .leading)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
-        .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(.separator))
-    }
-}
-
-private struct OverrunContent: View {
-    let title: String
-    let subtitle: String
-    let onDismiss: () -> Void
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text(title).font(.title3.bold())
-            Text(subtitle).font(.subheadline).foregroundStyle(.secondary)
-            Spacer(minLength: 0)
-            HStack {
-                Spacer()
                 Button("Dismiss", action: onDismiss).keyboardShortcut(.defaultAction)
             }
         }
