@@ -125,7 +125,7 @@ full 3 times regardless of whether you actually acked.
 | **Dismiss**/**ACK**/**Join** on any of a meeting's alerts | That whole meeting occurrence is done: every remaining offset (including a not-yet-fired travel-lead or at-start alert) is suppressed, and any pending snooze for it is dropped. Snoozing, by contrast, only quiets that one alert until the snooze comes due. |
 | `escalationSeconds` after an unacked alert, repeating | The push resends at **urgent** priority (`rotating_light` tag) — up to **3 times**, and never past **15 minutes** after the meeting's start. If an alert itself first fires later than that (e.g. a very late offset), there's no escalation window left at all — just the one initial push. |
 | Up to `lateAlertMinutes` after an offset's scheduled time | MeetAlert still fires that alert even if it only *saw* the event this late — covers sync lag between Google/Exchange and macOS's local calendar cache. |
-| Once a day, at or after `agendaHour` (if set) | A single ntfy push (default priority, no actions) summarizes today's meetings and your largest free gap. |
+| Once a day, at or after `agendaTime` (if set) | A single ntfy push (default priority, no actions) summarizes today's meetings and your largest free gap. |
 
 Each offset of a meeting occurrence alerts once (tracked in `state.json`); a snooze that comes
 back due re-shows the popup without re-sending a push or re-arming escalation. MeetAlert also
@@ -145,7 +145,7 @@ raw file editing.
 | `escalationSeconds` | `120` | Seconds between each escalation re-push (up to 3, and never past 15 minutes after the meeting's start). |
 | `awayIdleSeconds` | `120` | Idle time (or an immediate screen lock) before MeetAlert treats you as away and sends the first push at urgent priority instead of high. |
 | `travelLeadMinutes` | `30` | Extra early alert for meetings with a physical (non-video-call) location. |
-| `agendaHour` | `null` | Hour of day (0–23, local time) to push today's agenda. `null` = off. |
+| `agendaTime` | `null` | Minutes since midnight (local time) to push today's agenda — e.g. `619` = 10:19; use the Settings time picker instead of computing this by hand. `null` = off. A legacy `agendaHour` value migrates automatically. |
 | `ignoreAllDay` | `true` | Skip all-day events entirely. |
 | `ignoreKeywords` | `[]` | Case-insensitive substrings — any event title containing one is skipped. |
 | `ntfyServer` | `"https://ntfy.sh"` | Base URL of your ntfy server. |
@@ -162,12 +162,15 @@ exact key format if you ever need to hand-edit it (e.g. to un-ignore something).
 ## Filtering / ignoring events
 
 - **All-day events** — skipped by default (`ignoreAllDay`).
-- **Keywords** — add comma-separated substrings (Settings → Filters, or `ignoreKeywords`) to
+- **Keywords** — add comma-separated substrings (Settings → Ignore, or `ignoreKeywords`) to
   skip any event whose title matches, e.g. `focus time, lunch`.
 - **Whole calendars** — untick a calendar in Settings → Calendars to stop watching it entirely.
-- **One occurrence** — the menu's "Ignore *\<title\>* forever" button (or the popup's **Ignore
-  forever**) ignores that specific meeting occurrence. For a *recurring* series, this only
-  ignores the occurrence you clicked on — use a keyword filter to ignore the whole series.
+- **Ignore forever** — the popup/menu ignore button. On a **recurring** meeting it ignores the
+  **whole series** (the button says "Ignore series"); on a one-off it ignores that occurrence.
+- **Pre-ignore** — Settings → **Ignore** lists the next 7 days of meetings with per-row Ignore
+  buttons (recurring ones offer "This time only" / "Whole series"), plus everything currently
+  ignored with one-click un-ignore. Ignored meetings are excluded everywhere — alerts, menu bar,
+  and the morning agenda.
 - **Declined invites** — always skipped, no config needed.
 
 ## Joining a meeting
@@ -181,9 +184,9 @@ on the push if you want to ack from your phone.
 
 ## Morning agenda
 
-- **Morning agenda** (`agendaHour`, off by default) — set an hour in Settings or `config.json`
-  and MeetAlert pushes a single ntfy summary once a day: how many meetings, the first one, up
-  to 6 upcoming, and your largest free gap before 7pm.
+- **Morning agenda** (`agendaTime`, off by default) — pick a time (to the minute) in Settings →
+  Phone and MeetAlert pushes a single ntfy summary once a day: how many meetings, the first one,
+  up to 6 upcoming, and your largest free gap before 7pm.
 
 ## Testing
 

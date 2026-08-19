@@ -23,9 +23,9 @@ Work through these in order:
    minute**. `lateAlertMinutes` exists specifically to cushion whatever lag remains after that.
 4. **Keyword filter.** Check `ignoreKeywords` (Settings → Filters) — a title containing any of
    those substrings is silently skipped.
-5. **Already ignored.** If you previously clicked "Ignore forever" on this exact occurrence,
-   it's in `state.json`'s `ignoredKeys` — see [Configuration](Configuration#un-ignoring-something)
-   to undo it.
+5. **Already ignored.** Check Settings → **Ignore** — the "Currently ignored" list shows every
+   ignored occurrence and series with a one-click remove. (Under the hood: `state.json`'s
+   `ignoredKeys`/`ignoredSeriesIds`.)
 6. **All-day.** `ignoreAllDay` defaults to `true`.
 7. **Declined.** If you (the current user) declined the invite, it's always skipped — there's
    no setting to change this.
@@ -54,7 +54,7 @@ see [ntfy Setup](ntfy-Setup#self-hosting). Public `ntfy.sh` isn't affected — i
 
 ## The morning agenda push never shows up
 
-- Check `agendaHour` in Settings/`config.json` — it defaults **off** (`null`).
+- Check `agendaTime` (Settings → Phone → "Send morning agenda") — it defaults **off** (`null`).
 - It's skipped entirely under `MEETALERT_TEST=1`.
 - The agenda push only fires once its hour has passed for the day (`Calendar.current`'s local
   hour) and only once per calendar day — check `state.json`'s `lastAgendaDay`; if it already

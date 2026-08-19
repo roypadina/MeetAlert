@@ -29,6 +29,7 @@ final class Store {
         let end: Date
         let hasPhysicalLocation: Bool
         let joinURL: URL?
+        let seriesId: String?  // event identifier when the event recurs; nil for one-offs
         var id: String { key }
     }
 
@@ -38,7 +39,7 @@ final class Store {
         var escalationSeconds = 120
         var awayIdleSeconds = 120  // idle (or screen-locked) this long → treat as away from the Mac
         var travelLeadMinutes = 30  // extra alert offset for meetings with a physical location
-        var agendaHour: Int? = nil  // hour of day to push today's agenda; nil = off
+        var agendaTime: Int? = nil  // minutes since midnight to push today's agenda; nil = off
         var ignoreAllDay = true
         var ignoreKeywords: [String] = []
         var ntfyServer = "https://ntfy.sh"
@@ -47,8 +48,8 @@ final class Store {
 
         private enum CodingKeys: String, CodingKey {
             case alertMinutesBefore, lateAlertMinutes, escalationSeconds, awayIdleSeconds, travelLeadMinutes,
-                 agendaHour, ignoreAllDay, ignoreKeywords, ntfyServer, ntfyTopic, calendarIds
-            case leadMinutes  // legacy key, migrated in init(from:) below
+                 agendaTime, ignoreAllDay, ignoreKeywords, ntfyServer, ntfyTopic, calendarIds
+            case leadMinutes, agendaHour  // legacy keys, migrated in init(from:) below
         }
 
         init() {}
@@ -69,7 +70,8 @@ final class Store {
             escalationSeconds = try c.decodeIfPresent(Int.self, forKey: .escalationSeconds) ?? 120
             awayIdleSeconds = try c.decodeIfPresent(Int.self, forKey: .awayIdleSeconds) ?? 120
             travelLeadMinutes = try c.decodeIfPresent(Int.self, forKey: .travelLeadMinutes) ?? 30
-            agendaHour = try c.decodeIfPresent(Int.self, forKey: .agendaHour)
+            agendaTime = try c.decodeIfPresent(Int.self, forKey: .agendaTime)
+                ?? (try c.decodeIfPresent(Int.self, forKey: .agendaHour)).map { $0 * 60 }  // legacy hour-only field
             ignoreAllDay = try c.decodeIfPresent(Bool.self, forKey: .ignoreAllDay) ?? true
             ignoreKeywords = try c.decodeIfPresent([String].self, forKey: .ignoreKeywords) ?? []
             ntfyServer = try c.decodeIfPresent(String.self, forKey: .ntfyServer) ?? "https://ntfy.sh"
@@ -92,7 +94,7 @@ final class Store {
             try c.encode(escalationSeconds, forKey: .escalationSeconds)
             try c.encode(awayIdleSeconds, forKey: .awayIdleSeconds)
             try c.encode(travelLeadMinutes, forKey: .travelLeadMinutes)
-            try c.encode(agendaHour, forKey: .agendaHour)
+            try c.encode(agendaTime, forKey: .agendaTime)
             try c.encode(ignoreAllDay, forKey: .ignoreAllDay)
             try c.encode(ignoreKeywords, forKey: .ignoreKeywords)
             try c.encode(ntfyServer, forKey: .ntfyServer)
@@ -103,6 +105,8 @@ final class Store {
 
     struct Persisted: Codable {
         var ignoredKeys: Set<String> = []
+        var ignoredSeriesIds: Set<String> = []  // recurring series ignored whole (never pruned; tiny)
+        var ignoredTitles: [String: String] = [:]  // key/seriesId → display label for the Settings list
         var alertedKeys: Set<String> = []  // "identifier|epoch@offset" — epoch used to prune >24h old
         var snoozedUntil: [String: Date] = [:]  // keyed by alertKey; survives a restart
         var lastAgendaDay: String = ""  // "yyyy-MM-dd" of the last morning-agenda push
@@ -116,6 +120,8 @@ final class Store {
         init(from decoder: Decoder) throws {
             let c = try decoder.container(keyedBy: CodingKeys.self)
             ignoredKeys = try c.decodeIfPresent(Set<String>.self, forKey: .ignoredKeys) ?? []
+            ignoredSeriesIds = try c.decodeIfPresent(Set<String>.self, forKey: .ignoredSeriesIds) ?? []
+            ignoredTitles = try c.decodeIfPresent([String: String].self, forKey: .ignoredTitles) ?? [:]
             alertedKeys = try c.decodeIfPresent(Set<String>.self, forKey: .alertedKeys) ?? []
             snoozedUntil = try c.decodeIfPresent([String: Date].self, forKey: .snoozedUntil) ?? [:]
             lastAgendaDay = try c.decodeIfPresent(String.self, forKey: .lastAgendaDay) ?? ""
@@ -200,7 +206,8 @@ final class Store {
                                      start: start,
                                      end: start.addingTimeInterval(30 * 60),
                                      hasPhysicalLocation: false,
-                                     joinURL: nil)]
+                                     joinURL: nil,
+                                     seriesId: nil)]
             tick()
         }
     }
@@ -234,23 +241,24 @@ final class Store {
         sendMorningAgenda()
     }
 
-    /// Once a day, at or after agendaHour, push today's remaining schedule via ntfy (default priority,
+    /// Once a day, at or after agendaTime, push today's remaining schedule via ntfy (default priority,
     /// no ACK/escalation — informational only). Only runs once calendar access has actually resolved
     /// (not just defaulted to "not denied yet"), and only marks the day done once something either
     /// genuinely had nothing to send or the push actually succeeded — never burns the day's slot on
     /// a failed send.
     private func sendMorningAgenda() {
-        guard let hour = config.agendaHour, !testMode, accessResolved, !calendarAccessDenied, !agendaSending else { return }
+        guard let agendaTime = config.agendaTime, !testMode, accessResolved, !calendarAccessDenied, !agendaSending else { return }
         let now = Date()
         let cal = Calendar.current
-        guard cal.component(.hour, from: now) >= hour else { return }
+        let minutesNow = cal.component(.hour, from: now) * 60 + cal.component(.minute, from: now)
+        guard minutesNow >= agendaTime else { return }
         let df = DateFormatter()
         df.dateFormat = "yyyy-MM-dd"
         let today = df.string(from: now)
         guard persisted.lastAgendaDay != today else { return }
 
         guard let endOfDay = cal.date(bySettingHour: 23, minute: 59, second: 59, of: now) else { return }
-        let todays = fetchMeetings(from: now, to: endOfDay).sorted { $0.start < $1.start }
+        let todays = applyIgnores(fetchMeetings(from: now, to: endOfDay)).sorted { $0.start < $1.start }
         guard !todays.isEmpty else {
             persisted.lastAgendaDay = today  // legitimately nothing to send today
             saveState()
@@ -340,9 +348,17 @@ final class Store {
             let lookback = Double(abs(mostNegative) * 60 + config.lateAlertMinutes * 60)
             source = fetchMeetings(from: now.addingTimeInterval(-lookback), to: now.addingTimeInterval(12 * 3600))
         }
-        return source
-            .filter { !persisted.ignoredKeys.contains($0.key) }
-            .sorted { $0.start < $1.start }
+        return applyIgnores(source).sorted { $0.start < $1.start }
+    }
+
+    /// The single ignore gate — occurrence keys AND whole recurring series. Used by the fire-loop
+    /// scan, the morning agenda (which previously skipped ignore filtering entirely), and the
+    /// Settings pre-ignore picker.
+    private func applyIgnores(_ list: [Meeting]) -> [Meeting] {
+        list.filter { m in
+            !persisted.ignoredKeys.contains(m.key)
+                && (m.seriesId.map { !persisted.ignoredSeriesIds.contains($0) } ?? true)
+        }
     }
 
     /// Every event calendar across every account/source. Used by Settings' calendar toggle (so
@@ -396,7 +412,8 @@ final class Store {
                                start: event.startDate,
                                end: event.endDate ?? event.startDate.addingTimeInterval(3600),
                                hasPhysicalLocation: !location.isEmpty && !location.contains("://"),
-                               joinURL: Self.extractJoinURL(event))
+                               joinURL: Self.extractJoinURL(event),
+                               seriesId: event.hasRecurrenceRules ? event.eventIdentifier : nil)
             }
     }
 
@@ -513,7 +530,7 @@ final class Store {
             onAck: { [weak self] in self?.ack(alertKey) },
             onSnooze: { [weak self] minutes in self?.snooze(m, alertKey: alertKey, minutes: minutes) },
             onSnoozeStart: { [weak self] in self?.snoozeUntilStart(m, alertKey: alertKey) },
-            onIgnore: { [weak self] in self?.ignoreForever(m.key) })
+            onIgnore: { [weak self] in self?.ignoreForever(m) })
     }
 
     /// Settings' "Send test push" button.
@@ -558,13 +575,61 @@ final class Store {
         saveState()
     }
 
-    func ignoreForever(_ key: String) {
-        // escalationTasks is keyed per-offset ("key@offset") now, not per-meeting — cancel all of them.
-        for alertKey in escalationTasks.keys.filter({ $0 == key || $0.hasPrefix("\(key)@") }) {
+    /// The popup/menu "Ignore" button: a recurring meeting ignores the WHOLE series (that's what
+    /// "forever" means for a weekly standup — the old per-occurrence ignore let next week's alert
+    /// fire again), a one-off ignores just that occurrence.
+    func ignoreForever(_ m: Meeting) {
+        if m.seriesId != nil { ignoreSeries(m) } else { ignoreOccurrence(m) }
+    }
+
+    /// Ignore just this one occurrence — also what the Settings picker's "This time" does.
+    func ignoreOccurrence(_ m: Meeting) {
+        stopAlerts(for: m.key)
+        persisted.ignoredKeys.insert(m.key)
+        persisted.ignoredTitles[m.key] = "\(m.title) — \(m.start.formatted(date: .abbreviated, time: .shortened))"
+        saveState()
+        tick()
+    }
+
+    /// Ignore every occurrence of a recurring meeting, past and future.
+    func ignoreSeries(_ m: Meeting) {
+        guard let seriesId = m.seriesId else { return ignoreOccurrence(m) }
+        stopAlerts(for: m.key)
+        persisted.ignoredSeriesIds.insert(seriesId)
+        persisted.ignoredTitles[seriesId] = "\(m.title) — every occurrence"
+        saveState()
+        tick()
+    }
+
+    func unignore(_ id: String) {
+        persisted.ignoredKeys.remove(id)
+        persisted.ignoredSeriesIds.remove(id)
+        persisted.ignoredTitles.removeValue(forKey: id)
+        saveState()
+        tick()
+    }
+
+    /// Everything currently ignored, labeled for the Settings list (raw id as fallback for
+    /// entries that predate the label map).
+    func ignoredEntries() -> [(id: String, label: String)] {
+        persisted.ignoredSeriesIds.union(persisted.ignoredKeys)
+            .map { ($0, persisted.ignoredTitles[$0] ?? $0) }
+            .sorted { $0.1 < $1.1 }
+    }
+
+    /// Next 7 days of not-yet-ignored meetings, for the Settings pre-ignore picker.
+    func upcomingWeek() -> [Meeting] {
+        guard !testMode, !calendarAccessDenied else { return [] }
+        let now = Date()
+        return applyIgnores(fetchMeetings(from: now, to: now.addingTimeInterval(7 * 24 * 3600)))
+            .sorted { $0.start < $1.start }
+    }
+
+    private func stopAlerts(for meetingKey: String) {
+        // escalationTasks is keyed per-offset ("key@offset"), not per-meeting — cancel all of them.
+        for alertKey in escalationTasks.keys.filter({ $0 == meetingKey || $0.hasPrefix("\(meetingKey)@") }) {
             stopAlert(alertKey)
         }
-        persisted.ignoredKeys.insert(key)
-        saveState()
     }
 
     private func emit(_ line: String) {
@@ -604,6 +669,9 @@ final class Store {
         persisted.alertedKeys = Self.pruneOlderThan(persisted.alertedKeys, cutoff: cutoff)
         persisted.ignoredKeys = Self.pruneOlderThan(persisted.ignoredKeys, cutoff: cutoff)
         persisted.snoozedUntil = persisted.snoozedUntil.filter { $0.value >= cutoff }
+        persisted.ignoredTitles = persisted.ignoredTitles.filter {  // labels live only as long as their entry
+            persisted.ignoredKeys.contains($0.key) || persisted.ignoredSeriesIds.contains($0.key)
+        }
         guard let data = try? JSONEncoder().encode(persisted) else { return }
         try? data.write(to: Self.stateURL, options: .atomic)
     }

@@ -16,7 +16,7 @@ MeetAlert stores everything under `~/.config/meetalert/`:
 | `escalationSeconds` | Int | `120` | Seconds between each escalation re-push. Escalation repeats up to 3 times, and never continues past 15 minutes after the meeting's start regardless of `escalationSeconds`. If an alert itself first fires later than that 15-minute mark, there's no escalation window left at all — just the one initial push, no re-pushes. |
 | `awayIdleSeconds` | Int | `120` | Seconds of idle time (mouse/keyboard) — or an immediately-detected screen lock — before MeetAlert treats you as away from the Mac. Away changes only the *first* push: it goes out at urgent priority right away instead of high priority with a grace window. |
 | `travelLeadMinutes` | Int | `30` | An extra alert offset added automatically for meetings whose `location` field is a physical address rather than a video-call link (i.e. non-empty and containing no `://`). |
-| `agendaHour` | Int? | `null` | Hour of day (0–23, local time, `Calendar.current`) to push a one-time daily agenda summary via ntfy. `null` disables it. |
+| `agendaTime` | Int? | `null` | Minutes since midnight (local time, `Calendar.current`) to push a one-time daily agenda summary via ntfy — e.g. `619` = 10:19; the Settings **Phone** tab has a proper time picker. `null` disables it. A legacy `agendaHour` value is migrated (×60) automatically. |
 | `ignoreAllDay` | Bool | `true` | Skip all-day events. |
 | `ignoreKeywords` | [String] | `[]` | Case-insensitive substring match against the event title; any match skips the event. |
 | `ntfyServer` | String | `"https://ntfy.sh"` | Base URL of your ntfy server. |
@@ -26,9 +26,11 @@ MeetAlert stores everything under `~/.config/meetalert/`:
 Declined invites (events where you're a participant marked `.declined`) are always filtered out
 — there's no config field for it.
 
-The Settings window (menu bar icon → **Settings…**) covers every field above except raw file
-editing convenience — it's a thin `Form` bound directly to the same config object, so GUI edits
-and file edits are equivalent and interchangeable.
+The Settings window (menu bar icon → **Settings…**, tabs **Alerts / Ignore / Calendars / Phone**)
+covers every field above except raw file editing convenience — it's bound directly to the same
+config object, so GUI edits and file edits are equivalent and interchangeable. The **Ignore** tab
+additionally manages `state.json`'s ignore lists: pre-ignore any meeting in the next 7 days
+(recurring ones: "This time only" / "Whole series") and un-ignore anything with one click.
 
 ### Example: quieter defaults, self-hosted ntfy
 
@@ -39,7 +41,7 @@ and file edits are equivalent and interchangeable.
   "escalationSeconds": 180,
   "awayIdleSeconds": 180,
   "travelLeadMinutes": 30,
-  "agendaHour": 7,
+  "agendaTime": 420,
   "ignoreAllDay": true,
   "ignoreKeywords": ["focus time", "lunch", "OOO"],
   "ntfyServer": "https://ntfy.example.com",
@@ -61,9 +63,9 @@ and file edits are equivalent and interchangeable.
 
 `ignoredKeys` entries are shaped `"<identifier>|<epoch>"`, where `<identifier>` is the calendar
 event's EventKit identifier (falling back to its title if that's ever missing) and `<epoch>` is
-the meeting's start time as Unix seconds. This is exactly why "Ignore forever" only ignores *one
-occurrence* of a recurring meeting — the key is tied to that occurrence's specific start time,
-not the series.
+the meeting's start time as Unix seconds — so each entry pins *one occurrence*. Recurring
+meetings ignored whole live in `ignoredSeriesIds` instead (just the event identifier, no epoch),
+and `ignoredTitles` maps either kind of id to the human label shown in Settings → Ignore.
 
 `alertedKeys` entries are shaped `"<identifier>|<epoch>@<offset>"` — one key per
 (meeting occurrence, `alertMinutesBefore`/`travelLeadMinutes` entry) pair, since each offset
@@ -75,16 +77,22 @@ suffix (`"<identifier>|<epoch>@dismissed"`) instead of a numeric offset — that
   that's been dismissed outright (`@dismissed`) — so none of it re-fires. Pruned automatically:
   any key whose embedded epoch is more than 24 hours old is dropped the next time state is saved.
   You generally never need to touch this.
-- **`ignoredKeys`** — occurrences you've told MeetAlert to skip via "Ignore forever" (menu or
-  popup button) — this ignores *all* of that occurrence's offsets. Pruned the same way as
-  `alertedKeys` (entries whose embedded epoch is more than 24 hours old are dropped) — a specific
-  occurrence's epoch never recurs, so keeping the key past that point protects nothing.
+- **`ignoredKeys`** — single occurrences you've ignored (popup/menu button on a one-off, or
+  "This time only" in Settings → Ignore) — this ignores *all* of that occurrence's offsets.
+  Pruned the same way as `alertedKeys` (entries whose embedded epoch is more than 24 hours old
+  are dropped) — a specific occurrence's epoch never recurs, so keeping the key past that point
+  protects nothing.
+- **`ignoredSeriesIds`** — recurring series ignored whole ("Ignore series" on the popup, the menu
+  button on a recurring meeting, or "Whole series" in Settings → Ignore). Never pruned — remove
+  via Settings → Ignore.
+- **`ignoredTitles`** — id → display label for the Settings ignored list; cleaned up automatically
+  when its entry goes away.
 - **`snoozedUntil`** — alertKey → the date/time to re-show that alert's popup. Persisted so a
   snooze survives a restart or a crash instead of silently turning into a missed meeting. Pruned
   the same way as `alertedKeys` (entries more than 24 hours old are dropped).
 - **`lastAgendaDay`** — `"yyyy-MM-dd"` of the last date the morning-agenda push was sent, so it
   fires at most once per day. Empty string means it's never sent one. Only relevant when
-  `agendaHour` is set.
+  `agendaTime` is set.
 
 ### Un-ignoring something
 

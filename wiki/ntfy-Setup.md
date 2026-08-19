@@ -60,7 +60,7 @@ escalation). **Join only opens the link — it does not ack.** That's a hard ntf
 for it to also register an ack. Tap **ACK** separately if you want to stop escalation. ntfy caps
 notifications at 3 actions, so without a Join link it's just ACK + Snooze 5m — and escalation
 re-pushes carry ACK (+ Join) too, not just the first one. The separate daily morning-agenda push
-(if `agendaHour` is set) is plain default-priority, informational only — no actions, no escalation.
+(if `agendaTime` is set) is plain default-priority, informational only — no actions, no escalation.
 
 ### Android
 

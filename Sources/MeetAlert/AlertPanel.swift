@@ -156,7 +156,7 @@ private struct AlertContent: View {
                     Button("Till start", action: onSnoozeStart)
                 }
                 Spacer()
-                Button("Ignore forever", action: onIgnore)
+                Button(meeting.seriesId != nil ? "Ignore series" : "Ignore forever", action: onIgnore)
                 Button("Dismiss", action: onDismiss).keyboardShortcut(.defaultAction)
             }
         }

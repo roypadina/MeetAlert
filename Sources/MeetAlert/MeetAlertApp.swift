@@ -38,7 +38,8 @@ private struct MenuContent: View {
             Text("Snoozed: \(snoozed.title) until \(until.formatted(date: .omitted, time: .shortened))")
         }
         if let next = store.upcomingList.first {
-            Button("Ignore \(next.title) forever") { store.ignoreForever(next.key) }
+            Button(next.seriesId != nil ? "Ignore \(next.title) forever (whole series)"
+                                        : "Ignore \(next.title) forever") { store.ignoreForever(next) }
         }
         if store.calendarSelectionBroken {
             Text("Calendar selection invalid — open Settings")
