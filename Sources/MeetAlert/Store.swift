@@ -418,7 +418,8 @@ final class Store {
     }
 
     private static let joinURLPattern = try! NSRegularExpression(pattern: #"https?://[^\s<>"]+"#)
-    private static let joinURLHosts = ["zoom.us", "meet.google.com", "teams.microsoft.com", "teams.live.com", "webex.com", "whereby.com"]
+    private static let joinURLHosts = ["zoom.us", "meet.google.com", "teams.microsoft.com", "teams.live.com", "webex.com", "whereby.com",
+                                       "gotomeeting.com", "meet.jit.si", "chime.aws", "bluejeans.com", "ringcentral.com"]
 
     /// Scans event.url + location + notes (in that order) for the first URL whose host is a known
     /// video-call provider.

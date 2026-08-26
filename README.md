@@ -39,7 +39,7 @@ stops being an excuse.
 
 - **Multiple alerts per meeting** at whatever offsets you configure — minutes before, at start, or after (a late nag) — not just one.
 - **Desktop popup** that stays on screen until you act on it — no auto-dismiss, no silently missed alert — shown on whichever display your mouse is on.
-- **One-tap Join** — a prominent Join button (and a matching push action) opens the Zoom/Meet/Teams/Webex/Whereby link straight from the alert.
+- **One-tap Join** — a prominent Join button (and a matching push action) opens the Zoom/Meet/Teams/Webex/Whereby link straight from the alert, and every upcoming meeting with a link is joinable from the menu bar too.
 - **Phone push via [ntfy](https://ntfy.sh)** at the same moment, with tappable **ACK**, **Join**, and **Snooze 5m** actions.
 - **Away-aware escalation** — idle past a threshold or screen-locked, and the first push already goes out at urgent priority instead of waiting on a grace window nobody at the desk would see.
 - **Repeating urgent escalation** — up to 3 re-pushes (never past 15 minutes after the meeting starts) until you ack or snooze, not just one.
@@ -175,12 +175,15 @@ exact key format if you ever need to hand-edit it (e.g. to un-ignore something).
 
 ## Joining a meeting
 
-If MeetAlert finds a Zoom, Google Meet, Microsoft Teams, Webex, or Whereby link in the event's
-URL, location, or notes (checked in that order), both the desktop popup and the ntfy push get a
-**Join** action — but they behave slightly differently. On the **desktop popup**, Join opens the
-link *and* acks in one step, same as Dismiss. On the **phone push**, Join only opens the link —
-it can't ack, since that kind of action never reports back to MeetAlert; use the **ACK** button
-on the push if you want to ack from your phone.
+If MeetAlert finds a Zoom, Google Meet, Microsoft Teams, Webex, Whereby, GoToMeeting, Jitsi,
+Chime, BlueJeans, or RingCentral link in the event's URL, location, or notes (checked in that
+order), the desktop popup, the ntfy push, and the menu bar all get a **Join** action — but they
+behave slightly differently. On the **desktop popup**, Join opens the link *and* acks in one
+step, same as Dismiss. On the **phone push**, Join only opens the link — it can't ack, since
+that kind of action never reports back to MeetAlert; use the **ACK** button on the push if you
+want to ack from your phone. In the **menu bar**, any upcoming meeting with a link is a
+clickable Join row — clicking it only opens the link, so the alerts for that meeting still
+fire as scheduled.
 
 ## Morning agenda
 

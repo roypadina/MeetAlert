@@ -31,7 +31,16 @@ private struct MenuContent: View {
             Text("No upcoming meetings")
         }
         ForEach(store.upcomingList) { m in
-            Text("\(m.start.formatted(date: .omitted, time: .shortened))  \(m.title)")
+            let row = "\(m.start.formatted(date: .omitted, time: .shortened))  \(m.title)"
+            // Meetings with an online link are clickable straight from the menu; joining here is
+            // just "open the link" — it does NOT ack the meeting, so the alert still fires later.
+            if let url = m.joinURL {
+                Button { NSWorkspace.shared.open(url) } label: {
+                    Label("\(row)  — Join", systemImage: "video.fill")
+                }
+            } else {
+                Text(row)
+            }
         }
         if let snoozed = store.upcomingList.first(where: { store.snoozedUntilDate(for: $0.key) != nil }),
            let until = store.snoozedUntilDate(for: snoozed.key) {
