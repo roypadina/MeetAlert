@@ -30,6 +30,8 @@ final class Store {
         let hasPhysicalLocation: Bool
         let joinURL: URL?
         let seriesId: String?  // event identifier when the event recurs; nil for one-offs
+        let calendarTitle: String
+        let calendarColor: NSColor?  // Settings override, else the calendar's own macOS colour
         var id: String { key }
     }
 
@@ -45,10 +47,11 @@ final class Store {
         var ntfyServer = "https://ntfy.sh"
         var ntfyTopic = ""  // empty = phone notifications disabled; set your private topic
         var calendarIds: [String]? = nil  // nil = all calendars
+        var calendarColors: [String: String] = [:]  // calendarIdentifier → "#RRGGBB"; missing = the calendar's own colour
 
         private enum CodingKeys: String, CodingKey {
             case alertMinutesBefore, lateAlertMinutes, escalationSeconds, awayIdleSeconds, travelLeadMinutes,
-                 agendaTime, ignoreAllDay, ignoreKeywords, ntfyServer, ntfyTopic, calendarIds
+                 agendaTime, ignoreAllDay, ignoreKeywords, ntfyServer, ntfyTopic, calendarIds, calendarColors
             case leadMinutes, agendaHour  // legacy keys, migrated in init(from:) below
         }
 
@@ -77,6 +80,7 @@ final class Store {
             ntfyServer = try c.decodeIfPresent(String.self, forKey: .ntfyServer) ?? "https://ntfy.sh"
             ntfyTopic = try c.decodeIfPresent(String.self, forKey: .ntfyTopic) ?? ""
             calendarIds = try c.decodeIfPresent([String].self, forKey: .calendarIds)
+            calendarColors = try c.decodeIfPresent([String: String].self, forKey: .calendarColors) ?? [:]
         }
 
         // Not private: SettingsView commits the alert-times field through the same normalization.
@@ -100,6 +104,7 @@ final class Store {
             try c.encode(ntfyServer, forKey: .ntfyServer)
             try c.encode(ntfyTopic, forKey: .ntfyTopic)
             try c.encode(calendarIds, forKey: .calendarIds)
+            try c.encode(calendarColors, forKey: .calendarColors)
         }
     }
 
@@ -128,12 +133,16 @@ final class Store {
         }
     }
 
+    // Test mode gets its own directory: a test run must never read the real ntfy topic (which would
+    // push [TEST] alerts to a real phone) nor overwrite the real alerted/ignored state.
     static let configDir = FileManager.default.homeDirectoryForCurrentUser
-        .appendingPathComponent(".config/meetalert")
+        .appendingPathComponent(ProcessInfo.processInfo.environment["MEETALERT_TEST"] == "1"
+                                ? ".config/meetalert-test" : ".config/meetalert")
     static let configURL = configDir.appendingPathComponent("config.json")
     static let stateURL = configDir.appendingPathComponent("state.json")
 
     var menuBarText = ""
+    var menuBarSymbol = "calendar"  // state the label carries as a symbol; menu-bar text can't be coloured
     var upcomingList: [Meeting] = []
     var calendarAccessDenied = false
     var calendarSelectionBroken = false  // calendarIds resolved to zero live calendars (e.g. account re-added, ids rotated)
@@ -206,8 +215,10 @@ final class Store {
                                      start: start,
                                      end: start.addingTimeInterval(30 * 60),
                                      hasPhysicalLocation: false,
-                                     joinURL: nil,
-                                     seriesId: nil)]
+                                     joinURL: URL(string: "https://zoom.us/j/0000000000"),
+                                     seriesId: nil,
+                                     calendarTitle: "Work",
+                                     calendarColor: .systemIndigo)]
             tick()
         }
     }
@@ -221,11 +232,12 @@ final class Store {
         // the fire loop below still needs the full list to catch offsets due in the past.
         let visible = list.filter { $0.end > now }
         upcomingList = Array(visible.prefix(4))
-        let warningPrefix = (calendarSelectionBroken || lastPushFailed) ? "⚠︎ " : ""
         let noCalendarsSelected = config.calendarIds?.isEmpty == true
-        menuBarText = calendarAccessDenied ? "⚠︎ no calendar access"
+        let warning = calendarAccessDenied || noCalendarsSelected || calendarSelectionBroken || lastPushFailed
+        menuBarText = calendarAccessDenied ? "no calendar access"
             : noCalendarsSelected ? "no calendars selected"
-            : warningPrefix + menuBarTextFor(visible, now: now)
+            : menuBarTextFor(visible, now: now)
+        menuBarSymbol = warning ? "exclamationmark.triangle" : symbolFor(visible, now: now)
 
         for m in list {
             for offset in offsets(for: m) {
@@ -413,7 +425,9 @@ final class Store {
                                end: event.endDate ?? event.startDate.addingTimeInterval(3600),
                                hasPhysicalLocation: !location.isEmpty && !location.contains("://"),
                                joinURL: Self.extractJoinURL(event),
-                               seriesId: event.hasRecurrenceRules ? event.eventIdentifier : nil)
+                               seriesId: event.hasRecurrenceRules ? event.eventIdentifier : nil,
+                               calendarTitle: event.calendar?.title ?? "",
+                               calendarColor: self.colorFor(event.calendar))
             }
     }
 
@@ -435,6 +449,16 @@ final class Store {
         return nil
     }
 
+    /// A calendar's alert colour: the Settings override if there is one, else the colour macOS
+    /// already shows for that calendar in Calendar.app.
+    func colorFor(_ calendar: EKCalendar?) -> NSColor? {
+        guard let calendar else { return nil }
+        if let hex = config.calendarColors[calendar.calendarIdentifier], let overridden = NSColor(hex: hex) {
+            return overridden
+        }
+        return calendar.color
+    }
+
     /// Calendars grouped by source, for the Settings calendar checklist. Empty in test mode or when access is denied.
     func calendarsBySource() -> [(title: String, calendars: [EKCalendar])] {
         guard !testMode, !calendarAccessDenied else { return [] }
@@ -444,19 +468,34 @@ final class Store {
             .sorted { $0.title < $1.title }
     }
 
+    /// Nothing soon → plain calendar; in progress → filled clock; ≤3 min or already started →
+    /// badged clock. Symbol, not colour: a menu-bar label image is always rendered as a template.
+    private func symbolFor(_ list: [Meeting], now: Date) -> String {
+        guard let current = list.first else { return "calendar" }
+        if current.start <= now, now < current.end { return "clock.fill" }
+        let secondsLeft = current.start.timeIntervalSince(now)
+        if secondsLeft > 2 * 3600 { return "calendar" }
+        return secondsLeft <= 180 ? "clock.badge.exclamationmark" : "clock"
+    }
+
+    /// Keeps one meeting from eating half the menu bar.
+    private static func short(_ title: String) -> String {
+        title.count <= 28 ? title : String(title.prefix(27)) + "…"
+    }
+
     private func menuBarTextFor(_ list: [Meeting], now: Date) -> String {
         guard let current = list.first else { return "" }
         if current.start <= now, now < current.end {
             let minsLeft = Int(ceil(current.end.timeIntervalSince(now) / 60))
             if let next = list.dropFirst().first, next.start.timeIntervalSince(now) <= 2 * 3600 {
-                return "\(minsLeft)m left → \(next.start.formatted(date: .omitted, time: .shortened)) \(next.title)"
+                return "\(minsLeft)m left → \(next.start.formatted(date: .omitted, time: .shortened)) \(Self.short(next.title))"
             }
-            return "\(minsLeft)m left · \(current.title)"
+            return "\(minsLeft)m left · \(Self.short(current.title))"
         }
         guard current.start.timeIntervalSince(now) <= 2 * 3600 else { return "" }
         let secondsLeft = Int(current.start.timeIntervalSince(now))
-        if secondsLeft <= 0 { return "now \(current.title)" }
-        return "\(Int(ceil(Double(secondsLeft) / 60)))m \(current.title)"
+        if secondsLeft <= 0 { return "now · \(Self.short(current.title))" }
+        return "in \(Int(ceil(Double(secondsLeft) / 60)))m · \(Self.short(current.title))"
     }
 
     /// Away from the Mac (idle past awayIdleSeconds, or screen locked) → nobody's at the desk to
@@ -499,7 +538,7 @@ final class Store {
         let hardDeadline = m.start.addingTimeInterval(15 * 60)  // never escalate past this regardless of offset
         escalationTasks[alertKey] = Task {
             defer { Task { @MainActor in self.escalationTasks.removeValue(forKey: alertKey) } }
-            for _ in 0..<maxUrgent {
+            for attempt in 0..<maxUrgent {
                 let deadline = min(Date().addingTimeInterval(Double(testMode ? 20 : cfg.escalationSeconds)), hardDeadline)
                 guard deadline > Date() else { break }
                 let outcome = await Ntfy.waitForAck(token: token, since: since, deadline: deadline, cfg: cfg)
@@ -512,8 +551,12 @@ final class Store {
                     await MainActor.run { self.snooze(m, alertKey: alertKey, minutes: 5) }
                     return
                 case .timedOut:
-                    let ok = await Ntfy.urgent(m, token: token, cfg: cfg, test: testMode)
-                    await MainActor.run { self.lastPushFailed = !ok }
+                    let ok = await Ntfy.urgent(m, token: token, cfg: cfg, test: testMode,
+                                                attempt: attempt + 1, of: maxUrgent)
+                    await MainActor.run {
+                        self.lastPushFailed = !ok
+                        AlertPanel.escalated(key: alertKey)  // desktop panel says "phone alerted" too
+                    }
                     if testMode { await MainActor.run { self.emit("escalated \(token)") } }
                 }
             }

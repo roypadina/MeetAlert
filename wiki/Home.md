@@ -7,6 +7,8 @@ for the pitch and quick install; this wiki goes deeper on setup and day-to-day c
 
 ## Pages
 
+- **[The Popup](The-Popup)** — the alert card itself: urgency states and colours, what every
+  button does, the keyboard shortcuts, stacking, and the accessibility behaviour.
 - **[Installation](Installation)** — Homebrew and build-from-source, Gatekeeper/quarantine,
   calendar permission, the login item.
 - **[ntfy Setup](ntfy-Setup)** — picking a topic, subscribing on your phone, and the Android/iOS
@@ -19,7 +21,7 @@ for the pitch and quick install; this wiki goes deeper on setup and day-to-day c
 
 ## Quick facts
 
-- Five Swift files, one Swift Package executable, no Xcode project. `./build.sh` builds and
+- Six Swift files, one Swift Package executable, no Xcode project. `./build.sh` builds and
   ad-hoc-signs `build/MeetAlert.app`.
 - All state lives under `~/.config/meetalert/` — `config.json` (yours to edit) and `state.json`
   (app-owned, tracks what's already alerted, ignored, and the last morning-agenda date).

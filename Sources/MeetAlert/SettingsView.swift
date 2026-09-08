@@ -191,16 +191,29 @@ private struct CalendarsTab: View {
                 ForEach(groups, id: \.title) { group in
                     Section(group.title) {
                         ForEach(group.calendars, id: \.calendarIdentifier) { cal in
-                            Toggle(cal.title, isOn: Binding(
-                                get: { isEnabled(cal) },
-                                set: { _ in toggle(cal) }
-                            ))
+                            HStack {
+                                Toggle(cal.title, isOn: Binding(
+                                    get: { isEnabled(cal) },
+                                    set: { _ in toggle(cal) }
+                                ))
+                                Spacer()
+                                // Alert-panel dot colour for this calendar; starts at the colour
+                                // macOS already uses for it in Calendar.app.
+                                ColorPicker("", selection: colorBinding(cal)).labelsHidden()
+                            }
                         }
                     }
                 }
             }
         }
         .formStyle(.grouped)
+    }
+
+    private func colorBinding(_ cal: EKCalendar) -> Binding<Color> {
+        Binding(
+            get: { Color(nsColor: store.colorFor(cal) ?? .systemGray) },
+            set: { store.config.calendarColors[cal.calendarIdentifier] = NSColor($0).hexString }
+        )
     }
 
     private func isEnabled(_ cal: EKCalendar) -> Bool {
