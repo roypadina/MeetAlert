@@ -36,15 +36,15 @@ Expected, not a bug: MeetAlert treats you as "away" — idle past `awayIdleSecon
 or your screen is locked — and skips the normal high-priority grace window for the *first* push
 when that's the case. If this fires too eagerly, raise `awayIdleSeconds` in Settings.
 
-## Escalation stopped after 3 pushes / stopped once the meeting was 15 minutes old / never escalated at all
+## Escalation stopped after `escalationRepeats` pushes / stopped once the meeting was 15 minutes old / never escalated at all
 
-Also expected. Escalation repeats at most 3 times, and never continues past 15 minutes after the
+Also expected. Escalation repeats at most `escalationRepeats` times (3 by default), and never continues past 15 minutes after the
 meeting's start time, regardless of `escalationSeconds`. Both bounds are fixed, not configurable.
 If an alert itself first fired *later* than that 15-minute mark (e.g. a very late offset, or a
 missed alert caught up via `lateAlertMinutes`), there's no escalation window left at all by the
 time it fires — you'll get exactly one push and no re-pushes, which is correct, not a bug.
 
-## I acked/snoozed from my phone but it escalated 3 times anyway (self-hosted ntfy)
+## I acked/snoozed from my phone but it escalated the full count anyway (self-hosted ntfy)
 
 Check your server's `cache-duration` setting. MeetAlert detects an ACK/snooze by polling the
 topic's message history — if your self-hosted server has caching disabled
@@ -82,6 +82,28 @@ Expected. `build.sh` re-signs the app ad-hoc on every run, and macOS ties the TC
 grant to that signature — a new signature looks like a new app to Gatekeeper/TCC. This only
 matters for building from source; a Homebrew install doesn't rebuild locally so it won't churn
 the signature.
+
+## I tapped ACK on my phone and it keeps ringing anyway (Android)
+
+You have the ntfy app's **Settings → Notifications → "Keep alerting for highest priority"** turned
+on. Turn it off — it has to be the *global* toggle, because a per-topic "Alert only once" does not
+override the global setting.
+
+ACK is working: it reached MeetAlert, escalation stopped, and the notification was cleared and
+marked read. What didn't stop is ntfy's insistent alarm, which is a single looping `MediaPlayer`
+that only the notification's delete intent (a swipe) or opening the topic screen ever stops. An
+action button with `clear: true` cancels the notification programmatically, which never fires that
+delete intent — so the ring outlives the notification. Filed upstream as
+[ntfy-android#189](https://github.com/binwiederhier/ntfy-android/issues/189); see
+[ntfy Setup](ntfy-Setup#leave-keep-alerting-for-highest-priority-off) for the full explanation.
+
+Until you turn it off, the only way out is **tap ACK, then swipe the notification away** (or open
+the topic). Swiping alone doesn't ack — ntfy has no dismiss callback, so MeetAlert never hears it
+and the next re-push restarts the ring.
+
+Once it's off, get the persistence back from MeetAlert instead: set `escalationSeconds` to `45`
+and `escalationRepeats` to `8` (about six minutes of pings, each one silenceable, all of them
+ended by a single ACK).
 
 ## Urgent escalation isn't bypassing Do Not Disturb / Focus mode
 

@@ -44,7 +44,8 @@ MeetAlert can fix on its own.
 MeetAlert thinks you're away from the Mac (idle past `awayIdleSeconds`, or the screen is locked),
 that first push skips straight to priority 5 (urgent) instead, since there's no point waiting on
 a grace window nobody at the desk would see. Either way, if nobody acks within `escalationSeconds`,
-it re-sends at priority 5 (tag `rotating_light`) — up to **3 times total**, and never past
+it re-sends at priority 5 (tag `rotating_light`) — up to `escalationRepeats` times (**3** by
+default), and never past
 **15 minutes** after the meeting's start (if the alert itself first fires later than that, there's
 no escalation window left — just the one push). The intent is that the urgent pushes are loud
 enough, and persistent enough, to wake you up even on a silenced phone — but whether they actually
@@ -74,6 +75,27 @@ break through Do Not Disturb. ntfy creates a separate channel per priority level
 
 Without this, a max-priority ntfy push behaves like any other notification under DND — silent.
 
+#### Leave "Keep alerting for highest priority" OFF
+
+The ntfy Android app has a **Settings → Notifications → "Keep alerting for highest priority"**
+option (off by default) that loops an alarm sound for every priority-5 notification. It looks
+like exactly what MeetAlert wants. Don't turn it on: **tapping ACK cannot stop that ring.**
+
+Inside the app the loop is one shared `MediaPlayer`, and only two things stop it — swiping the
+notification away (its *delete intent*), or opening the topic's detail screen. MeetAlert's **ACK**
+and **Snooze 5m** are action buttons with `clear: true`, which cancel the notification
+*programmatically*; a programmatic cancel never fires the delete intent, so the alarm keeps
+playing over a notification that is already gone and already marked read. Nothing MeetAlert can
+publish to the topic silences a ring that has already started, either. (Filed upstream as
+[ntfy-android#189](https://github.com/binwiederhier/ntfy-android/issues/189).)
+
+Swiping *first* is no better: ntfy has no dismiss callback, so a swipe tells MeetAlert nothing,
+does not count as an ack, and the next escalation re-push starts the ring again.
+
+So leave it off and let MeetAlert own the repetition instead — a short `escalationSeconds` with a
+higher `escalationRepeats` (e.g. `45` and `8`, roughly six minutes of pings). Every ping is an
+ordinary priority-5 notification you can silence, and one **ACK** genuinely ends all of them.
+
 ### iOS
 
 iOS's Focus modes only let notifications through if they're marked **Time-Sensitive** or
@@ -99,7 +121,7 @@ security-by-obscurity.
 **Keep message caching enabled** (`cache-duration` in `server.yml` — the default is on). MeetAlert
 detects an ACK or snooze by *polling the topic's message history*
 (`GET /<topic>/json?poll=1&since=...`); with `cache-duration: 0` there's no history to poll at
-all, so a real ACK is invisible to MeetAlert and it escalates the full 3 times regardless of
+all, so a real ACK is invisible to MeetAlert and it escalates the full `escalationRepeats` times regardless of
 whether you actually tapped ACK. This is the single most common self-hosting misconfiguration for
 MeetAlert specifically — public `ntfy.sh` caches by default, so this only bites self-hosters who
 turned caching off.
