@@ -25,6 +25,7 @@ stops being an excuse.
 - [Features](#features)
 - [Install](#install)
 - [ntfy setup](#ntfy-setup)
+  - [Why not ntfy's insistent ring?](#why-not-ntfys-insistent-ring)
 - [How it works](#how-it-works)
 - [Configuration](#configuration)
 - [Filtering / ignoring events](#filtering--ignoring-events)
@@ -45,7 +46,7 @@ stops being an excuse.
 - **One-tap Join** — a prominent Join button (and a matching push action) opens the Zoom/Meet/Teams/Webex/Whereby link straight from the alert, and every upcoming meeting with a link is joinable from the menu bar too.
 - **Phone push via [ntfy](https://ntfy.sh)** at the same moment, with tappable **ACK**, **Join**, and **Snooze 5m** actions.
 - **Away-aware escalation** — idle past a threshold or screen-locked, and the first push already goes out at urgent priority instead of waiting on a grace window nobody at the desk would see.
-- **Repeating urgent escalation** — up to 3 re-pushes (never past 15 minutes after the meeting starts) until you ack or snooze, not just one.
+- **Repeating urgent escalation** — up to `escalationRepeats` re-pushes (3 by default, never past 15 minutes after the meeting starts) until you ack or snooze, not just one.
 - **Morning agenda push** — an optional daily rundown of today's meetings and your largest free gap.
 - Reads **every calendar macOS syncs** — Google, iCloud, Exchange, CalDAV — with zero API setup, and skips meetings you've declined. See [below](#google-calendar-and-any-other-calendar).
 - **Travel-lead alerts** for meetings with a physical address — one extra early alert to account for getting there.
@@ -111,11 +112,41 @@ No Xcode project — it's a plain Swift Package executable.
    per-platform walkthrough (short version: Android needs a per-channel "override Do Not
    Disturb" toggle; iOS's Focus-mode bypass is a known ntfy limitation, so also allow the ntfy
    app explicitly under Focus mode settings as a backstop).
+6. On Android, leave **Settings → Notifications → "Keep alerting for highest priority"** *off*
+   (that's the default) and let MeetAlert do the repeating instead — see
+   [Why not ntfy's insistent ring?](#why-not-ntfys-insistent-ring) below. If you turn it on
+   anyway, tapping **ACK** will not silence it.
 
 Self-hosted ntfy servers work the same way — just set `ntfyServer` to your own instance. **Keep
 message caching enabled on the server** (the default) — with `cache-duration: 0`, there's no
 message history left to poll, so MeetAlert can never see an ACK/snooze reply and escalates the
-full 3 times regardless of whether you actually acked.
+full `escalationRepeats` times regardless of whether you actually acked.
+
+### Why not ntfy's insistent ring?
+
+The ntfy Android app has a **"Keep alerting for highest priority"** setting (off by default) that
+loops an alarm sound for every priority-5 notification until it's stopped. It sounds like exactly
+what MeetAlert wants. It isn't — **tapping ACK cannot stop it.**
+
+In the app, that loop is one shared `MediaPlayer`, and only two things ever stop it:
+
+- swiping the notification away (its *delete intent*), or
+- opening the topic's detail screen in the app.
+
+An action button with `clear: true` — which is what MeetAlert's **ACK** and **Snooze 5m** are —
+cancels the notification *programmatically*. A programmatic cancel does not fire the delete
+intent, so the loop keeps playing over a notification that is already gone and already marked
+read. Same for a `view` action with `clear: true`. There is no publish-side way to stop it either:
+nothing you can send to the topic silences a ring that's already started.
+
+The result, if you enable it: ACK reaches MeetAlert and stops the escalation correctly, and the
+phone keeps ringing anyway until you separately swipe the (vanished) notification or open the
+topic. Swiping *first* doesn't help — ntfy has no dismiss callback, so a swipe tells MeetAlert
+nothing, isn't an ack, and the next escalation re-push starts the ring again.
+
+So leave that setting off and let MeetAlert own the repetition: set a short `escalationSeconds`
+and a higher `escalationRepeats` (e.g. `45` and `8` ≈ six minutes of pings). Every ping is a
+normal priority-5 notification you can silence, and a single **ACK** genuinely ends all of them.
 
 ## The popup
 
@@ -146,9 +177,9 @@ exactly one. Nothing about the layout changes on hover; only the buttons themsel
 | Each offset in `alertMinutesBefore` (before, at, or after start), plus one `travelLeadMinutes` offset for meetings with a physical address | Desktop popup appears on whichever screen your mouse is on, **and** an ntfy push goes out with **ACK**, **Join <provider>** (if there's a meeting link), and **Snooze 5m** actions. Tapping the push body itself opens the meeting link. |
 | You're away from the Mac (idle past `awayIdleSeconds`, or the screen is locked) | That first push skips the high-priority grace window and goes straight out at **urgent** priority — nobody's at the desk to see the popup anyway. |
 | Several offsets of the same meeting come due in one scan (e.g. the event synced in late) | They collapse into **one** alert — the latest due one — instead of stacking popups. |
-| Anything up to escalation | Clicking **Dismiss**, **Join**, **Snooze**, **Till start**, or **Ignore forever** on the popup — or tapping **ACK** on the push — counts as acknowledged; escalation stops. Tapping **Snooze 5m** on the push snoozes it (clamped to the meeting's start) and also stops escalation. Tapping **ACK** or **Snooze 5m** on the push also clears that notification from the phone (which stops any insistent ringing). Tapping **Join** on the *push* only opens the meeting — it does **not** ack (that action never reports back to MeetAlert); the desktop popup's Join button does both. |
+| Anything up to escalation | Clicking **Dismiss**, **Join**, **Snooze**, **Till start**, or **Ignore forever** on the popup — or tapping **ACK** on the push — counts as acknowledged; escalation stops. Tapping **Snooze 5m** on the push snoozes it (clamped to the meeting's start) and also stops escalation. Tapping **ACK** or **Snooze 5m** on the push also clears that notification from the phone and marks it read — but it does **not** stop ntfy's insistent ring if you enabled that; see [Why not ntfy's insistent ring?](#why-not-ntfys-insistent-ring). Tapping **Join** on the *push* only opens the meeting — it does **not** ack (that action never reports back to MeetAlert); the desktop popup's Join button does both. |
 | **Dismiss**/**ACK**/**Join** on any of a meeting's alerts | That whole meeting occurrence is done: every remaining offset (including a not-yet-fired travel-lead or at-start alert) is suppressed, and any pending snooze for it is dropped. Snoozing, by contrast, only quiets that one alert until the snooze comes due. |
-| `escalationSeconds` after an unacked alert, repeating | The push resends at **urgent** priority (`rotating_light` tag, titled *Not acknowledged* and numbered *Alert n of 3*) and the desktop popup switches to a pulsing **Not acknowledged — phone alerted** state — up to **3 times**, and never past **15 minutes** after the meeting's start. If an alert itself first fires later than that (e.g. a very late offset), there's no escalation window left at all — just the one initial push. |
+| `escalationSeconds` after an unacked alert, repeating | The push resends at **urgent** priority (`rotating_light` tag, titled *Not acknowledged* and numbered *Alert n of N*) and the desktop popup switches to a pulsing **Not acknowledged — phone alerted** state — up to `escalationRepeats` times (**3** by default), and never past **15 minutes** after the meeting's start. If an alert itself first fires later than that (e.g. a very late offset), there's no escalation window left at all — just the one initial push. |
 | Up to `lateAlertMinutes` after an offset's scheduled time | MeetAlert still fires that alert even if it only *saw* the event this late — covers sync lag between Google/Exchange and macOS's local calendar cache. |
 | Once a day, at or after `agendaTime` (if set) | A single ntfy push (default priority, no actions) summarizes today's meetings and your largest free gap. |
 
@@ -167,7 +198,8 @@ raw file editing.
 |---|---|---|
 | `alertMinutesBefore` | `[3, 0]` | Minutes before start to fire an alert — one entry per alert. `0` = at start, negative = that many minutes *after* start (a late alert). Deduplicated and sorted (descending) on load. |
 | `lateAlertMinutes` | `10` | Still fire a missed alert up to this many minutes *after* its scheduled time (sync-lag cushion). |
-| `escalationSeconds` | `120` | Seconds between each escalation re-push (up to 3, and never past 15 minutes after the meeting's start). |
+| `escalationSeconds` | `120` | Seconds between each escalation re-push (never past 15 minutes after the meeting's start). |
+| `escalationRepeats` | `3` | How many urgent re-pushes before MeetAlert gives up. Raise it (with a shorter `escalationSeconds`) to replace ntfy's insistent ring with repetition MeetAlert controls — an ACK stops these, insistent can't be stopped. |
 | `awayIdleSeconds` | `120` | Idle time (or an immediate screen lock) before MeetAlert treats you as away and sends the first push at urgent priority instead of high. |
 | `travelLeadMinutes` | `30` | Extra early alert for meetings with a physical (non-video-call) location. |
 | `agendaTime` | `null` | Minutes since midnight (local time) to push today's agenda — e.g. `619` = 10:19; use the Settings time picker instead of computing this by hand. `null` = off. A legacy `agendaHour` value migrates automatically. |
@@ -239,7 +271,7 @@ via `open`) so the bundle's `Info.plist`/`LSUIElement` context is intact and std
 attached to your terminal.
 
 Test mode forces a few things for determinism: you're always treated as "present" (never away),
-the escalation loop caps at a single urgent resend instead of three, and the morning-agenda push
+the escalation loop caps at a single urgent resend instead of `escalationRepeats`, and the morning-agenda push
 is skipped entirely.
 
 ## Google Calendar (and any other calendar)

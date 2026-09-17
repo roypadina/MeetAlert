@@ -44,7 +44,10 @@ private struct AlertsTab: View {
                     labeled("Catch up late alerts", "Still fire an alert up to \(store.config.lateAlertMinutes) min after its time (calendar sync lag).")
                 }
                 Stepper(value: $store.config.escalationSeconds, in: 30...600, step: 30) {
-                    labeled("Escalate after \(store.config.escalationSeconds)s", "No ack in time → urgent re-push to the phone, up to 3 times.")
+                    labeled("Escalate after \(store.config.escalationSeconds)s", "No ack in time → urgent re-push to the phone.")
+                }
+                Stepper(value: $store.config.escalationRepeats, in: 1...20) {
+                    labeled("Re-push up to \(store.config.escalationRepeats)×", "Own the repetition here instead of the phone's insistent ring — an ACK stops it, insistent can't be stopped.")
                 }
                 Stepper(value: $store.config.awayIdleSeconds, in: 60...600, step: 30) {
                     labeled("Away after \(store.config.awayIdleSeconds)s idle", "Idle or locked this long → first push already goes out urgent.")

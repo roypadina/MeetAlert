@@ -39,6 +39,7 @@ final class Store {
         var alertMinutesBefore: [Int] = [3, 0]  // positive = before start, 0 = at start, negative = after start
         var lateAlertMinutes = 10  // fire a missed alert up to this long past its scheduled time (covers Google→macOS sync lag)
         var escalationSeconds = 120
+        var escalationRepeats = 3  // urgent re-pushes before giving up; raise it if the phone's insistent ring is off
         var awayIdleSeconds = 120  // idle (or screen-locked) this long → treat as away from the Mac
         var travelLeadMinutes = 30  // extra alert offset for meetings with a physical location
         var agendaTime: Int? = nil  // minutes since midnight to push today's agenda; nil = off
@@ -50,7 +51,7 @@ final class Store {
         var calendarColors: [String: String] = [:]  // calendarIdentifier → "#RRGGBB"; missing = the calendar's own colour
 
         private enum CodingKeys: String, CodingKey {
-            case alertMinutesBefore, lateAlertMinutes, escalationSeconds, awayIdleSeconds, travelLeadMinutes,
+            case alertMinutesBefore, lateAlertMinutes, escalationSeconds, escalationRepeats, awayIdleSeconds, travelLeadMinutes,
                  agendaTime, ignoreAllDay, ignoreKeywords, ntfyServer, ntfyTopic, calendarIds, calendarColors
             case leadMinutes, agendaHour  // legacy keys, migrated in init(from:) below
         }
@@ -71,6 +72,7 @@ final class Store {
             }
             lateAlertMinutes = try c.decodeIfPresent(Int.self, forKey: .lateAlertMinutes) ?? 10
             escalationSeconds = try c.decodeIfPresent(Int.self, forKey: .escalationSeconds) ?? 120
+            escalationRepeats = max(1, try c.decodeIfPresent(Int.self, forKey: .escalationRepeats) ?? 3)
             awayIdleSeconds = try c.decodeIfPresent(Int.self, forKey: .awayIdleSeconds) ?? 120
             travelLeadMinutes = try c.decodeIfPresent(Int.self, forKey: .travelLeadMinutes) ?? 30
             agendaTime = try c.decodeIfPresent(Int.self, forKey: .agendaTime)
@@ -96,6 +98,7 @@ final class Store {
             try c.encode(alertMinutesBefore, forKey: .alertMinutesBefore)
             try c.encode(lateAlertMinutes, forKey: .lateAlertMinutes)
             try c.encode(escalationSeconds, forKey: .escalationSeconds)
+            try c.encode(escalationRepeats, forKey: .escalationRepeats)
             try c.encode(awayIdleSeconds, forKey: .awayIdleSeconds)
             try c.encode(travelLeadMinutes, forKey: .travelLeadMinutes)
             try c.encode(agendaTime, forKey: .agendaTime)
@@ -534,7 +537,7 @@ final class Store {
         let since = Int(Date().timeIntervalSince1970)
         let cfg = config
         let testMode = testMode
-        let maxUrgent = testMode ? 1 : 3  // repeating escalation, bounded
+        let maxUrgent = testMode ? 1 : max(1, cfg.escalationRepeats)  // repeating escalation, bounded
         let hardDeadline = m.start.addingTimeInterval(15 * 60)  // never escalate past this regardless of offset
         escalationTasks[alertKey] = Task {
             defer { Task { @MainActor in self.escalationTasks.removeValue(forKey: alertKey) } }
