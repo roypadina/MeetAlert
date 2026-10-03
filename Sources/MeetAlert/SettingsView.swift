@@ -32,11 +32,10 @@ private struct AboutTab: View {
             Text("MeetAlert").font(.title2.bold())
             Text("Version \(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "?")")
                 .foregroundStyle(.secondary)
-            Text(AboutInfo.text).multilineTextAlignment(.center).frame(maxWidth: 380)
             HStack {
+                Button("About MeetAlert…") { AboutWindow.show() }
                 Button("Support on Ko-fi ☕") { NSWorkspace.shared.open(AboutInfo.kofi) }
                     .buttonStyle(.borderedProminent)
-                Button("GitHub") { NSWorkspace.shared.open(AboutInfo.github) }
             }
         }
         .padding()
