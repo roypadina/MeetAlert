@@ -31,3 +31,11 @@ for the pitch and quick install; this wiki goes deeper on setup and day-to-day c
 - Multiple alerts per meeting, away-aware and repeating escalation, one-tap Join, and an
   optional morning agenda push are all covered on the
   [Configuration](Configuration) page.
+
+## Support
+
+If MeetAlert saves you from walking into a meeting 10 minutes late, you can support its development — it's optional and always appreciated.
+
+[![Support me on Ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/roypadina)
+
+A ⭐ on the repo helps just as much.

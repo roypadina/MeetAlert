@@ -15,9 +15,32 @@ struct SettingsView: View {
                 .tabItem { Label("Calendars", systemImage: "calendar") }
             PhoneTab(store: store)
                 .tabItem { Label("Phone", systemImage: "iphone") }
+            AboutTab()
+                .tabItem { Label("About", systemImage: "info.circle") }
         }
         .frame(width: 520, height: 480)
         .onAppear { NSApp.activate(ignoringOtherApps: true) }
+    }
+}
+
+// MARK: - About
+
+private struct AboutTab: View {
+    var body: some View {
+        VStack(spacing: 12) {
+            Image(nsImage: NSApp.applicationIconImage).resizable().frame(width: 72, height: 72)
+            Text("MeetAlert").font(.title2.bold())
+            Text("Version \(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "?")")
+                .foregroundStyle(.secondary)
+            Text(AboutInfo.text).multilineTextAlignment(.center).frame(maxWidth: 380)
+            HStack {
+                Button("Support on Ko-fi ☕") { NSWorkspace.shared.open(AboutInfo.kofi) }
+                    .buttonStyle(.borderedProminent)
+                Button("GitHub") { NSWorkspace.shared.open(AboutInfo.github) }
+            }
+        }
+        .padding()
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
 

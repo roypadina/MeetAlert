@@ -11,6 +11,7 @@ stops being an excuse.
 [![Swift](https://img.shields.io/badge/Swift-5-F05138?logo=swift&logoColor=white)](https://swift.org)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg?logo=opensourceinitiative&logoColor=white)](LICENSE)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg?logo=github)](CONTRIBUTING.md)
+[![Ko-fi](https://img.shields.io/badge/Ko--fi-support-F16061?logo=ko-fi&logoColor=white)](https://ko-fi.com/roypadina)
 
 <br>
 
@@ -287,9 +288,11 @@ whatever lag remains.
 
 ## Support
 
-If MeetAlert saves you from walking into a meeting 10 minutes late, you can
-[**buy me a coffee on Ko-fi ☕**](https://ko-fi.com/roypadina) — totally optional, always
-appreciated. A **⭐ star** helps just as much.
+If MeetAlert saves you from walking into a meeting 10 minutes late, you can support its development — it's optional and always appreciated.
+
+[![Support me on Ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/roypadina)
+
+A ⭐ on the repo helps just as much.
 
 ## License
 

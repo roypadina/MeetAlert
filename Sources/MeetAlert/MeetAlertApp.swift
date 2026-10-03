@@ -62,6 +62,31 @@ private struct MenuContent: View {
         Divider()
         SettingsLink { Text("Settings…") }
         Button("Edit config file…") { NSWorkspace.shared.open(Store.configURL) }
+        Divider()
+        Button("About MeetAlert") { showAbout() }
+        Button("Support on Ko-fi ☕") { NSWorkspace.shared.open(AboutInfo.kofi) }
         Button("Quit") { NSApp.terminate(nil) }
     }
+
+    private func showAbout() {
+        let credits = NSMutableAttributedString(
+            string: "\(AboutInfo.text)\n\n",
+            attributes: [.font: NSFont.systemFont(ofSize: 11), .foregroundColor: NSColor.labelColor])
+        credits.append(NSAttributedString(string: "Support on Ko-fi ☕", attributes: [
+            .font: NSFont.systemFont(ofSize: 11), .link: AboutInfo.kofi]))
+        NSApp.activate(ignoringOtherApps: true)
+        NSApp.orderFrontStandardAboutPanel(options: [.credits: credits])
+    }
+}
+
+enum AboutInfo {
+    static let kofi = URL(string: "https://ko-fi.com/roypadina")!
+    static let github = URL(string: "https://github.com/roypadina/MeetAlert")!
+    static let text = """
+        Made by Roy Padina
+
+        I'm a software engineer from Israel who builds small, focused Mac tools to fix the little annoyances in my own day — then shares them free and open source.
+
+        If this app saves you time, a coffee on Ko-fi keeps the next one coming. ☕
+        """
 }
