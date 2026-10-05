@@ -3,10 +3,14 @@ import SwiftUI
 
 @main
 struct MeetAlertApp: App {
-    @State private var store = Store()
+    // Plain let, not @State: reading a @State in init() isn't the installed value — SwiftUI builds a
+    // fresh Store on each such read, so start() ran on a throwaway Store (deallocated after its first
+    // tick) while the menu and Settings bound an unstarted one with default config.
+    private let store: Store
 
     init() {
-        let store = store
+        let store = Store()
+        self.store = store
         Task { @MainActor in store.start() }
     }
 
