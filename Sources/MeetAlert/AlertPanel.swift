@@ -102,6 +102,7 @@ enum AlertPanel {
             backing: .buffered,
             defer: false
         )
+        panel.isReleasedWhenClosed = false  // Swift owns it via `active`; avoid AppKit double-release on close()
         panel.isFloatingPanel = true
         panel.level = .screenSaver
         panel.hasShadow = true
@@ -124,8 +125,9 @@ enum AlertPanel {
             ctx.duration = 0.15
             panel.animator().alphaValue = 0
         }, completionHandler: {
-            panel.orderOut(nil)
-            panel.alphaValue = 1
+            // close, not orderOut: a hidden panel keeps its TimelineView/pulse rendering forever (CPU leak)
+            panel.contentView = nil
+            panel.close()
             Task { @MainActor in reflow() }
         })
     }

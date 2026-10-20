@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.5.5] - 2026-10-20
+
+### Fixed
+- High idle CPU (20-30%) after the app had shown many alerts: dismissed alert panels were hidden instead of closed, so each one kept redrawing its countdown and pulse in the background.
+
 ## [1.5.4] - 2026-10-05
 
 ### Fixed
