@@ -45,7 +45,7 @@ private struct AboutTab: View {
 
 // MARK: - Alerts
 
-private struct AlertsTab: View {
+struct AlertsTab: View {
     @Bindable var store: Store
     @State private var alertMinutesText = ""
     @FocusState private var alertMinutesFocused: Bool
@@ -202,7 +202,7 @@ private struct IgnoreTab: View {
 
 // MARK: - Calendars
 
-private struct CalendarsTab: View {
+struct CalendarsTab: View {
     @Bindable var store: Store
 
     var body: some View {
@@ -260,7 +260,7 @@ private struct CalendarsTab: View {
 
 // MARK: - Phone
 
-private struct PhoneTab: View {
+struct PhoneTab: View {
     @Bindable var store: Store
     @State private var testPushResult: String?
 

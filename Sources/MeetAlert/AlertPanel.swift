@@ -188,7 +188,7 @@ private enum Urgency {
     var word: String { self == .started ? "Started" : "Starting in" }
 }
 
-private struct AlertContent: View {
+struct AlertContent: View {
     let meeting: Store.Meeting
     let state: PanelState
     let onJoin: (() -> Void)?

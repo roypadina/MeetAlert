@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.5.6] - 2026-10-23
+
+### Changed
+- Universal build: now runs on Intel Macs (arm64 + x86_64).
+- README and wiki polish: install one-liner, Requirements block, macOS 15+ first-launch steps, icon and screenshots.
+- Security/Conduct contact is now GitHub private vulnerability reporting instead of an email address.
+
 ## [1.5.5] - 2026-10-20
 
 ### Fixed
@@ -105,7 +112,9 @@ First release.
 ### Added
 - Menu-bar meeting alerts: unmissable popup, ntfy phone push with ACK, urgent escalation, snooze 1m/5m/till-start, calendar picker, keyword filters, late-alert window, login item.
 
-[Unreleased]: https://github.com/roypadina/MeetAlert/compare/v1.5.4...HEAD
+[Unreleased]: https://github.com/roypadina/MeetAlert/compare/v1.5.6...HEAD
+[1.5.6]: https://github.com/roypadina/MeetAlert/compare/v1.5.5...v1.5.6
+[1.5.5]: https://github.com/roypadina/MeetAlert/compare/v1.5.4...v1.5.5
 [1.5.4]: https://github.com/roypadina/MeetAlert/compare/v1.5.3...v1.5.4
 [1.5.3]: https://github.com/roypadina/MeetAlert/compare/v1.5.2...v1.5.3
 [1.5.2]: https://github.com/roypadina/MeetAlert/compare/v1.5.1...v1.5.2

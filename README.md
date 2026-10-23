@@ -1,5 +1,7 @@
 <div align="center">
 
+<img src="docs/icon.png" width="128" alt="MeetAlert icon">
+
 # MeetAlert
 
 ### Unmissable meeting alerts for your Mac.
@@ -7,13 +9,20 @@
 Desktop popup + phone push + urgent escalation — so "I didn't see the calendar reminder"
 stops being an excuse.
 
-[![macOS](https://img.shields.io/badge/macOS-14%2B-000000?logo=apple&logoColor=white)](https://www.apple.com/macos/)
+[![macOS 14+](https://img.shields.io/badge/macOS-14%2B-000000?logo=apple&logoColor=white)](https://www.apple.com/macos/)
+[![Universal](https://img.shields.io/badge/Apple%20Silicon%20%2B%20Intel-universal-555555?logo=apple&logoColor=white)](#requirements)
+[![Release](https://img.shields.io/github/v/release/roypadina/MeetAlert?logo=github)](https://github.com/roypadina/MeetAlert/releases/latest)
+[![Homebrew](https://img.shields.io/badge/Homebrew-cask-FBB040?logo=homebrew&logoColor=white)](#install)
 [![Swift](https://img.shields.io/badge/Swift-5-F05138?logo=swift&logoColor=white)](https://swift.org)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg?logo=opensourceinitiative&logoColor=white)](LICENSE)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg?logo=github)](CONTRIBUTING.md)
 [![Ko-fi](https://img.shields.io/badge/Ko--fi-support-F16061?logo=ko-fi&logoColor=white)](https://ko-fi.com/roypadina)
 
 <br>
+
+```bash
+brew install --cask roypadina/tap/meetalert
+```
 
 ![MeetAlert popup: a meeting alert panel with a live countdown, the event title, its calendar, and Join / Snooze / Dismiss / Ignore buttons](docs/screenshots/popup.png)
 
@@ -25,6 +34,8 @@ stops being an excuse.
 
 - [Features](#features)
 - [Install](#install)
+- [Requirements](#requirements)
+- [Screenshots](#screenshots)
 - [ntfy setup](#ntfy-setup)
   - [Why not ntfy's insistent ring?](#why-not-ntfys-insistent-ring)
 - [How it works](#how-it-works)
@@ -57,20 +68,25 @@ stops being an excuse.
 
 ## Install
 
-> **Requires macOS 14+ (Sonoma).**
-
 ### Homebrew
 
 ```bash
-brew tap roypadina/tap
-brew install --cask meetalert
+brew install --cask roypadina/tap/meetalert
 ```
 
-> MeetAlert is ad-hoc signed (not notarized). On first launch, if Gatekeeper complains,
-> **right-click it in `/Applications` → Open** (then Open again), or clear quarantine once:
-> ```bash
-> xattr -dr com.apple.quarantine /Applications/MeetAlert.app
-> ```
+## Requirements
+
+macOS 14 Sonoma or later · Apple Silicon and Intel (universal binary)
+
+### First launch
+
+MeetAlert is ad-hoc signed (not notarized). If macOS blocks it, open **System Settings →
+Privacy & Security**, scroll down and click **Open Anyway** next to MeetAlert (right-click → Open
+no longer works on macOS 15+). Or clear quarantine once:
+
+```bash
+xattr -dr com.apple.quarantine /Applications/MeetAlert.app
+```
 
 On first launch macOS will prompt for **Calendar** access — MeetAlert can't see your meetings
 without it. It also registers itself to **start at login** automatically, but only on the very
@@ -88,7 +104,7 @@ cd MeetAlert
 open build/MeetAlert.app
 ```
 
-`build.sh` runs `swift build -c release` and assembles/ad-hoc-signs `build/MeetAlert.app`.
+`build.sh` runs `swift build -c release --arch arm64 --arch x86_64` (universal) and assembles/ad-hoc-signs `build/MeetAlert.app`.
 No Xcode project — it's a plain Swift Package executable.
 
 ## ntfy setup
@@ -285,6 +301,12 @@ The tradeoff is that you're at the mercy of macOS's own sync interval for that a
 last-minute meetings are showing up late, open Calendar.app → Settings → General and set
 **"Refresh calendars"** to **Every minute**. `lateAlertMinutes` exists specifically to cushion
 whatever lag remains.
+
+## Screenshots
+
+| Alerts settings | Phone settings |
+|---|---|
+| ![Settings: alert times and escalation timing](docs/screenshots/settings-alerts.png) | ![Settings: ntfy server, topic and morning agenda](docs/screenshots/settings-phone.png) |
 
 ## Support
 
