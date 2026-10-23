@@ -14,6 +14,7 @@ stops being an excuse.
 [![Release](https://img.shields.io/github/v/release/roypadina/MeetAlert?logo=github)](https://github.com/roypadina/MeetAlert/releases/latest)
 [![Homebrew](https://img.shields.io/badge/Homebrew-cask-FBB040?logo=homebrew&logoColor=white)](#install)
 [![Swift](https://img.shields.io/badge/Swift-5-F05138?logo=swift&logoColor=white)](https://swift.org)
+[![Website](https://img.shields.io/badge/website-apps.roypadina-2F62E6)](https://apps.roypadina.synology.me/apps/meetalert/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg?logo=opensourceinitiative&logoColor=white)](LICENSE)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg?logo=github)](CONTRIBUTING.md)
 [![Ko-fi](https://img.shields.io/badge/Ko--fi-support-F16061?logo=ko-fi&logoColor=white)](https://ko-fi.com/roypadina)
@@ -307,6 +308,15 @@ whatever lag remains.
 | Alerts settings | Phone settings |
 |---|---|
 | ![Settings: alert times and escalation timing](docs/screenshots/settings-alerts.png) | ![Settings: ntfy server, topic and morning agenda](docs/screenshots/settings-phone.png) |
+
+## More Mac apps by Roy
+
+Free, open-source Mac menu-bar apps and terminal tools, all on one site: **[apps.roypadina.synology.me](https://apps.roypadina.synology.me/)**.
+
+- [NtfyBar](https://apps.roypadina.synology.me/apps/ntfybar/) — ntfy notifications on your Mac: popups that stay, rules, commands, plugins.
+- [Obsidian Vault Git Watcher](https://apps.roypadina.synology.me/apps/obsidian-vault-git-watcher/) — Never leave a vault uncommitted again.
+- [Window Organizer](https://apps.roypadina.synology.me/apps/window-organizer/) — Clear the desk in one keystroke.
+- [LanGuard](https://apps.roypadina.synology.me/apps/languard/) — Wi-Fi off when you're wired. Back on when you're not.
 
 ## Support
 
