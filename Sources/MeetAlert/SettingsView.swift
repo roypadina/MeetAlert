@@ -269,6 +269,8 @@ struct PhoneTab: View {
             Section {
                 TextField("Server", text: $store.config.ntfyServer)
                 TextField("Topic", text: $store.config.ntfyTopic, prompt: Text("empty = phone push off"))
+                SecureField("Access token (optional)", text: $store.config.ntfyToken)
+                SecureField("Fallback topic URL (optional)", text: $store.config.ntfyFallbackURL, prompt: Text("https://ntfy.sh/…"))
                 HStack {
                     Button("Send test push") {
                         Task {
@@ -283,7 +285,7 @@ struct PhoneTab: View {
             } header: {
                 Text("ntfy")
             } footer: {
-                Text("Pushes go to this topic with tappable ACK / Join / Snooze actions. Keep the topic private — anyone who knows it can read it.")
+                Text("Pushes go to this topic with tappable ACK / Join / Snooze actions. Keep the topic private — anyone who knows it can read it. The access token (for a password-protected server) and the fallback topic URL (used, without actions, when the main server can't be reached) are kept in the macOS Keychain, not in config.json.")
             }
 
             Section {
