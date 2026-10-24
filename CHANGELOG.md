@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.5.8] - 2026-10-25
+
+### Changed
+- Releases are now signed with a stable identity, so permissions survive future updates. After this one update you may need to re-allow Calendar access (and notifications) once.
+
 ## [1.5.7] - 2026-10-23
 
 ### Added
