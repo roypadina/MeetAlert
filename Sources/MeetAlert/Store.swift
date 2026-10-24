@@ -49,6 +49,9 @@ final class Store {
         var ntfyTopic = ""  // empty = phone notifications disabled; set your private topic
         var calendarIds: [String]? = nil  // nil = all calendars
         var calendarColors: [String: String] = [:]  // calendarIdentifier → "#RRGGBB"; missing = the calendar's own colour
+        // Secrets: Keychain only, deliberately not in CodingKeys (never written to config.json).
+        var ntfyToken = ""  // optional Bearer token for a protected server
+        var ntfyFallbackURL = ""  // optional full topic URL published to (unauthenticated, no actions) when the primary fails
 
         private enum CodingKeys: String, CodingKey {
             case alertMinutesBefore, lateAlertMinutes, escalationSeconds, escalationRepeats, awayIdleSeconds, travelLeadMinutes,
@@ -154,6 +157,7 @@ final class Store {
     private let testMode = ProcessInfo.processInfo.environment["MEETALERT_TEST"] == "1"
     @ObservationIgnored private lazy var ekStore = EKEventStore()  // never touched in test mode
     var config = Config() { didSet { saveConfig() } }  // Settings GUI + config.json both write here
+    private var secretsLoaded = false
     private var persisted = Persisted()
     private var testMeetings: [Meeting] = []
     private var escalationTasks: [String: Task<Void, Never>] = [:]
@@ -689,18 +693,29 @@ final class Store {
         if !FileManager.default.fileExists(atPath: Self.configURL.path) {
             saveConfig()
         }
+        if !testMode {  // test mode never touches the real Keychain
+            config.ntfyToken = Keychain.get(Keychain.tokenService)
+            config.ntfyFallbackURL = Keychain.get(Keychain.fallbackService)
+            secretsLoaded = true  // before this, saveConfig must not overwrite the Keychain with empty defaults
+        }
         loadConfig()
         loadState()
     }
 
     private func loadConfig() {
         guard let data = try? Data(contentsOf: Self.configURL),
-              let decoded = try? JSONDecoder().decode(Config.self, from: data),
-              decoded != config else { return }  // skip the identical rewrite that'd fight a hand-edit
+              var decoded = try? JSONDecoder().decode(Config.self, from: data) else { return }
+        decoded.ntfyToken = config.ntfyToken  // secrets aren't in the file; keep the Keychain values
+        decoded.ntfyFallbackURL = config.ntfyFallbackURL
+        guard decoded != config else { return }  // skip the identical rewrite that'd fight a hand-edit
         config = decoded
     }
 
     private func saveConfig() {
+        if secretsLoaded {
+            Keychain.set(Keychain.tokenService, config.ntfyToken)
+            Keychain.set(Keychain.fallbackService, config.ntfyFallbackURL)
+        }
         guard let data = try? JSONEncoder().encode(config) else { return }
         try? data.write(to: Self.configURL, options: .atomic)
     }

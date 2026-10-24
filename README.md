@@ -135,7 +135,11 @@ No Xcode project — it's a plain Swift Package executable.
    [Why not ntfy's insistent ring?](#why-not-ntfys-insistent-ring) below. If you turn it on
    anyway, tapping **ACK** will not silence it.
 
-Self-hosted ntfy servers work the same way — just set `ntfyServer` to your own instance. **Keep
+Self-hosted ntfy servers work the same way — just set `ntfyServer` to your own instance. If it
+requires a login, paste an ntfy **access token** in Settings → ntfy (stored in the macOS Keychain,
+sent only to that server, including inside the ACK / Snooze buttons); an optional **fallback topic
+URL** gets the alert (without buttons) if the main server is unreachable. Details in the
+[ntfy Setup wiki page](https://github.com/roypadina/MeetAlert/wiki/ntfy-Setup). **Keep
 message caching enabled on the server** (the default) — with `cache-duration: 0`, there's no
 message history left to poll, so MeetAlert can never see an ACK/snooze reply and escalates the
 full `escalationRepeats` times regardless of whether you actually acked.
