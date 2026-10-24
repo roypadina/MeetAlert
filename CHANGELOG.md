@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.6.0] - 2026-10-25
+
 ### Added
 - ntfy access token (Settings → ntfy, stored in the macOS Keychain) for password-protected servers: sent as a Bearer token on the publish, the ACK poll and the ACK / Snooze buttons, only to the configured server.
 - Optional fallback topic URL (Keychain): if the main publish fails, the alert is posted there without buttons or credentials.
