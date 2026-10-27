@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.6.1] - 2026-10-27
+
+### Fixed
+- No more keychain password prompts for the ntfy access token and fallback URL after every update. MeetAlert now saves and reads them through macOS's `security` tool, which every version can use without a prompt. If you saw the prompt before, click **Always Allow** once.
+
 ## [1.6.0] - 2026-10-25
 
 ### Added
