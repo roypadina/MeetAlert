@@ -280,28 +280,32 @@ struct AlertContent: View {
                 }
                 .buttonStyle(SignalButtonStyle(signal: urgency.signal, prominent: true))
                 .keyboardShortcut(.defaultAction)
+                .help("Join the meeting (Return)")
             }
-            Button("Snooze 5m", action: onSnooze5)
+            Button("Snooze 5 Min", action: onSnooze5)
                 .buttonStyle(SignalButtonStyle(signal: urgency.signal))
                 .keyboardShortcut("5", modifiers: [])
+                .help("Snooze 5 minutes (5 or Esc)")
             Button("Dismiss", action: onDismiss)
                 // Exactly one filled button: Dismiss takes it when there is nothing to join.
                 .buttonStyle(SignalButtonStyle(signal: urgency.signal, prominent: onJoin == nil))
                 // ⌘D, never a bare "d" or Return: dismiss is FINAL (it acks the occurrence), and a
                 // clicked card is key, so a bare letter would let ordinary typing kill the alert.
                 .keyboardShortcut("d", modifiers: .command)
-            Button(meeting.seriesId != nil ? "Ignore series" : "Ignore", action: onIgnore)
+                .help("Done with this meeting, no more alerts (⌘D)")
+            Button(meeting.seriesId != nil ? "Ignore Series" : "Ignore", action: onIgnore)
                 .buttonStyle(SignalButtonStyle(signal: urgency.signal))
                 // ⌘⇧I, same reasoning as Dismiss and then some: ignoring is final AND wide-reaching.
                 .keyboardShortcut("i", modifiers: [.command, .shift])
+                .help("Never alert for this again (⌘⇧I)")
             Spacer(minLength: 0)
             Menu("More") {
                 if let onJoin {
-                    Button("Join meeting", action: onJoin).keyboardShortcut("j", modifiers: [])
+                    Button("Join Meeting", action: onJoin).keyboardShortcut("j", modifiers: [])
                 }
-                Button("Snooze 1 min", action: onSnooze1).keyboardShortcut("1", modifiers: [])  // snooze is reversible
+                Button("Snooze 1 Minute", action: onSnooze1).keyboardShortcut("1", modifiers: [])  // snooze is reversible
                 if meeting.start > Date() {
-                    Button("Snooze until start (\(meeting.start.formatted(date: .omitted, time: .shortened)))",
+                    Button("Snooze Until Start (\(meeting.start.formatted(date: .omitted, time: .shortened)))",
                            action: onSnoozeStart).keyboardShortcut("t", modifiers: [])
                 }
             }
@@ -310,6 +314,7 @@ struct AlertContent: View {
             .fixedSize()
             // esc means "go away, come back" — never a silent final dismissal.
             Button("", action: onSnooze5).keyboardShortcut(.cancelAction).opacity(0).frame(width: 0)
+                .accessibilityHidden(true)
         }
     }
 
@@ -352,8 +357,10 @@ struct AlertContent: View {
     }
 }
 
-/// One button look for the whole panel: capsule, hover brighten, press shrink. `prominent` fills
+/// One button look for the whole panel: capsule, hover highlight, press shrink. `prominent` fills
 /// with the urgency hue (exactly one per panel); the rest are quiet outlines in the same hue.
+/// Custom on purpose: this app is never active and the panel is not key until clicked, so system
+/// `.borderedProminent` buttons would render in their gray inactive look and lose the signal hue.
 private struct SignalButtonStyle: ButtonStyle {
     var signal: Color
     var prominent = false
@@ -367,6 +374,7 @@ private struct SignalButtonStyle: ButtonStyle {
         let signal: Color
         let prominent: Bool
         @State private var hover = false
+        @Environment(\.colorSchemeContrast) private var contrast
 
         var body: some View {
             cfg.label
@@ -377,9 +385,13 @@ private struct SignalButtonStyle: ButtonStyle {
                 .background(
                     Capsule()
                         .fill(prominent ? AnyShapeStyle(signal) : AnyShapeStyle(Color.primary.opacity(hover ? 0.14 : 0.08)))
-                        .overlay(Capsule().strokeBorder(prominent ? .clear : signal.opacity(hover ? 0.7 : 0.35)))
+                        .overlay(Capsule().strokeBorder(
+                            prominent ? AnyShapeStyle(.clear)
+                                : contrast == .increased ? AnyShapeStyle(.primary) : AnyShapeStyle(signal.opacity(hover ? 0.7 : 0.35)),
+                            lineWidth: contrast == .increased ? 1.5 : 1))
                 )
-                .brightness(prominent && hover ? 0.06 : 0)
+                // Hover never brightens the filled button: white on a lighter fill fell to ~4.1:1.
+                .opacity(prominent && hover ? 0.92 : 1)
                 .scaleEffect(cfg.isPressed ? 0.97 : 1)
                 .animation(.easeOut(duration: 0.12), value: hover)
                 .onHover { hover = $0 }
