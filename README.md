@@ -328,6 +328,7 @@ Free, open-source Mac menu-bar apps and terminal tools, all on one site: **[apps
 - [Obsidian Vault Git Watcher](https://apps.roypadina.synology.me/apps/obsidian-vault-git-watcher/) — Never leave a vault uncommitted again.
 - [Window Organizer](https://apps.roypadina.synology.me/apps/window-organizer/) — Clear the desk in one keystroke.
 - [LanGuard](https://apps.roypadina.synology.me/apps/languard/) — Wi-Fi off when you're wired. Back on when you're not.
+- [PullPing](https://apps.roypadina.synology.me/apps/pullping/) — Know when your pull requests need you, across every GitHub account.
 
 ## Support
 
