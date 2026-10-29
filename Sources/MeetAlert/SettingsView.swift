@@ -7,6 +7,7 @@ import SwiftUI
 struct AlertsTab: View {
     @Bindable var store: Store
     @State private var alertMinutesText = ""
+    @State private var alertMinutesError: String?
     @FocusState private var alertMinutesFocused: Bool
 
     var body: some View {
@@ -23,7 +24,12 @@ struct AlertsTab: View {
             } header: {
                 Text("When to Alert")
             } footer: {
-                Text("Comma-separated minutes before the meeting starts. 0 = at start, negative = after start (a late nag). Example: 10, 3, 0, -5.").formFooter()
+                VStack(alignment: .leading, spacing: 4) {
+                    if let alertMinutesError {
+                        Label(alertMinutesError, systemImage: "exclamationmark.triangle").formFooter()
+                    }
+                    Text("Comma-separated minutes before the meeting starts. 0 = at start, negative = after start (a late nag). Example: 10, 3, 0, -5.").formFooter()
+                }
             }
             Section("Timing") {
                 stepperRow("Catch up late alerts", "Still fire a missed alert this long after its time (calendar sync lag).",
@@ -53,11 +59,16 @@ struct AlertsTab: View {
     /// (e.g. building up "-5") never gets silently eaten mid-edit. Unparseable/empty input reverts
     /// the field to whatever's currently in config rather than clobbering it.
     private func commitAlertMinutes() {
-        let mins = alertMinutesText.split(separator: ",").compactMap { Int($0.trimmingCharacters(in: .whitespaces)) }
+        let parts = alertMinutesText.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
+        let mins = parts.compactMap { Int($0) }
         if !mins.isEmpty {
             store.config.alertMinutesBefore = Store.Config.normalized(mins)
         }
+        let typed = alertMinutesText
         alertMinutesText = formattedAlertMinutes
+        // Say what was dropped instead of silently rewriting the field (FLW-23).
+        alertMinutesError = mins.count == parts.count ? nil
+            : "“\(typed)” isn't a list of whole minutes, so \(alertMinutesText) was kept."
     }
 }
 
@@ -189,7 +200,7 @@ struct CalendarsTab: View {
                 Section("Calendars") {
                     if store.calendarAccessDenied {
                         LabeledContent {
-                            Button("Open System Settings") { openCalendarPrivacy() }
+                            Button("Open System Settings") { Self.openCalendarPrivacy() }
                         } label: {
                             Label("Calendar access is off", systemImage: "exclamationmark.triangle")
                             Text("MeetAlert can't see any meetings, so it can't alert you. Allow MeetAlert under Privacy & Security > Calendars.")
@@ -221,7 +232,7 @@ struct CalendarsTab: View {
         .formStyle(.grouped)
     }
 
-    private func openCalendarPrivacy() {
+    static func openCalendarPrivacy() {
         let pane = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Calendars")!
         if !NSWorkspace.shared.open(pane) {
             NSWorkspace.shared.open(URL(fileURLWithPath: "/System/Applications/System Settings.app"))

@@ -100,6 +100,13 @@ private struct MenuContent: View {
             Label("Calendar selection invalid — open Settings", systemImage: "exclamationmark.triangle")
                 .labelStyle(.titleAndIcon)
         }
+        // The menu-bar warning triangle always says why here (FLW-11, FLW-17).
+        if store.calendarAccessDenied {
+            Button("Calendar Access Is Off — Open System Settings…") { CalendarsTab.openCalendarPrivacy() }
+        }
+        if store.lastPushFailed {
+            Button("Phone Push Failed — Check Settings…") { SettingsWindow.shared.show() }
+        }
         Divider()
         Button("Settings…") { SettingsWindow.shared.show() }.keyboardShortcut(",")
         Button("Edit Config File…") { NSWorkspace.shared.open(Store.configURL) }
