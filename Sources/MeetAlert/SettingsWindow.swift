@@ -36,7 +36,7 @@ final class SettingsWindow {
             let tabs = SettingsTabs()
             tabs.tabStyle = .toolbar
             // Each pane gets its own height (SET-8): grouped forms have no intrinsic height.
-            add(tabs, "Alerts", "bell.badge", AlertsTab(store: store), height: 600)
+            add(tabs, "Alerts", "bell.badge", AlertsTab(store: store), height: 660)
             add(tabs, "Ignore", "bell.slash", IgnoreTab(store: store), height: 600)
             add(tabs, "Calendars", "calendar", CalendarsTab(store: store), height: 420)
             add(tabs, "Phone", "bell.and.waves.left.and.right", PhoneTab(store: store), height: 600)
