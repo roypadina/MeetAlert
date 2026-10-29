@@ -31,7 +31,7 @@ struct AlertsTab: View {
                     Text("Comma-separated minutes before the meeting starts. 0 = at start, negative = after start (a late nag). Example: 10, 3, 0, -5.").formFooter()
                 }
             }
-            Section("Timing") {
+            Section {
                 stepperRow("Catch up late alerts", "Still fire a missed alert this long after its time (calendar sync lag).",
                            value: $store.config.lateAlertMinutes, in: 2...30, unit: " min")
                 stepperRow("Escalate after", "No acknowledgement in time → urgent re-push to the phone.",
@@ -42,6 +42,11 @@ struct AlertsTab: View {
                            value: $store.config.awayIdleSeconds, in: 60...600, step: 30, unit: " s")
                 stepperRow("Travel lead", "Extra early alert for meetings with a physical address.",
                            value: $store.config.travelLeadMinutes, in: 10...120, step: 5, unit: " min")
+            } header: {
+                Text("Timing")
+            } footer: {
+                // The panel's shortcuts, listed once (KBD-1); each button's tooltip repeats its own.
+                Text("In an alert: Return joins, 5 or Esc snoozes 5 minutes, ⌘D dismisses, ⌘⇧I ignores. More holds J (join), 1 (snooze 1 minute) and T (until start).").formFooter()
             }
         }
         .formStyle(.grouped)
