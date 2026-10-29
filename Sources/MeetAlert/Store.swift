@@ -3,7 +3,6 @@ import CoreGraphics
 import EventKit
 import Foundation
 import Observation
-import ServiceManagement
 
 // Private API, no public header. @_silgen_name would hard-link the symbol at load time — if it
 // ever vanishes from a future macOS, the WHOLE APP fails to launch. Resolve it lazily via dlsym
@@ -185,14 +184,6 @@ final class Store {
         if testMode {
             scheduleTestMeeting()
             return
-        }
-        // Register for login exactly once, ever — re-checking `.enabled` on every launch meant a
-        // user who removed it via System Settings got it silently re-added on the next launch.
-        if !UserDefaults.standard.bool(forKey: "didRegisterLoginItem") {
-            UserDefaults.standard.set(true, forKey: "didRegisterLoginItem")
-            if SMAppService.mainApp.status != .enabled {
-                try? SMAppService.mainApp.register()
-            }
         }
         Task { await requestAccessAndTick() }
         NotificationCenter.default.addObserver(forName: .EKEventStoreChanged, object: nil, queue: .main) { [weak self] _ in
@@ -485,9 +476,9 @@ final class Store {
         return secondsLeft <= 180 ? "clock.badge.exclamationmark" : "clock"
     }
 
-    /// Keeps one meeting from eating half the menu bar.
+    /// Keeps one meeting from eating half the menu bar (a notched Mac drops wide items).
     private static func short(_ title: String) -> String {
-        title.count <= 28 ? title : String(title.prefix(27)) + "…"
+        title.count <= 16 ? title : String(title.prefix(15)) + "…"
     }
 
     private func menuBarTextFor(_ list: [Meeting], now: Date) -> String {
@@ -495,7 +486,7 @@ final class Store {
         if current.start <= now, now < current.end {
             let minsLeft = Int(ceil(current.end.timeIntervalSince(now) / 60))
             if let next = list.dropFirst().first, next.start.timeIntervalSince(now) <= 2 * 3600 {
-                return "\(minsLeft)m left → \(next.start.formatted(date: .omitted, time: .shortened)) \(Self.short(next.title))"
+                return "\(minsLeft)m left → \(next.start.formatted(date: .omitted, time: .shortened))"
             }
             return "\(minsLeft)m left · \(Self.short(current.title))"
         }

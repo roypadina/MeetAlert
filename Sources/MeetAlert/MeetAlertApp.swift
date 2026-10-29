@@ -3,6 +3,7 @@ import SwiftUI
 
 @main
 struct MeetAlertApp: App {
+    @NSApplicationDelegateAdaptor private var delegate: AppDelegate
     // Plain let, not @State: reading a @State in init() isn't the installed value — SwiftUI builds a
     // fresh Store on each such read, so start() ran on a throwaway Store (deallocated after its first
     // tick) while the menu and Settings bound an unstarted one with default config.
@@ -11,6 +12,7 @@ struct MeetAlertApp: App {
     init() {
         let store = Store()
         self.store = store
+        SettingsWindow.shared.store = store
         Task { @MainActor in store.start() }
     }
 
@@ -19,11 +21,32 @@ struct MeetAlertApp: App {
             MenuContent(store: store)
         } label: {
             Image(systemName: store.menuBarSymbol)
+                .accessibilityLabel("MeetAlert")  // VoiceOver: the app's name, not the symbol's
             Text(store.menuBarText)
         }
-        Settings {
-            SettingsView(store: store)
+        .commands {  // App menu while a window is open (policy .regular)
+            CommandGroup(replacing: .appSettings) {
+                Button("Settings…") { SettingsWindow.shared.show() }.keyboardShortcut(",")
+            }
         }
+    }
+}
+
+final class AppDelegate: NSObject, NSApplicationDelegate {
+    @MainActor func applicationDidFinishLaunching(_ notification: Notification) {
+        // First launch only (MBX-18); never in the headless test pipeline.
+        guard ProcessInfo.processInfo.environment["MEETALERT_TEST"] != "1",
+              !UserDefaults.standard.bool(forKey: "didShowWelcome") else { return }
+        UserDefaults.standard.set(true, forKey: "didShowWelcome")
+        WelcomeWindow.show()
+    }
+
+    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { false }
+
+    /// Opening MeetAlert again (Finder, Raycast) shows Settings: the way in when the icon is hidden (MBX-8).
+    @MainActor func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        if !flag { SettingsWindow.shared.show() }
+        return true
     }
 }
 
@@ -67,11 +90,11 @@ private struct MenuContent: View {
                 .labelStyle(.titleAndIcon)
         }
         Divider()
-        SettingsLink { Text("Settings…") }
+        Button("Settings…") { SettingsWindow.shared.show() }.keyboardShortcut(",")
         Button("Edit Config File…") { NSWorkspace.shared.open(Store.configURL) }
         Divider()
         Button("About MeetAlert") { AboutWindow.show() }
         Button("Support on Ko-fi ☕") { NSWorkspace.shared.open(AboutInfo.kofi) }
-        Button("Quit") { NSApp.terminate(nil) }
+        Button("Quit MeetAlert") { NSApp.terminate(nil) }.keyboardShortcut("q")
     }
 }

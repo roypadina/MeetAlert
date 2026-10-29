@@ -2,47 +2,6 @@ import AppKit
 import EventKit
 import SwiftUI
 
-struct SettingsView: View {
-    @Bindable var store: Store
-
-    var body: some View {
-        TabView {
-            AlertsTab(store: store)
-                .tabItem { Label("Alerts", systemImage: "bell.badge") }
-            IgnoreTab(store: store)
-                .tabItem { Label("Ignore", systemImage: "bell.slash") }
-            CalendarsTab(store: store)
-                .tabItem { Label("Calendars", systemImage: "calendar") }
-            PhoneTab(store: store)
-                .tabItem { Label("Phone", systemImage: "bell.and.waves.left.and.right") }
-            AboutTab()
-                .tabItem { Label("About", systemImage: "info.circle") }
-        }
-        .frame(width: 520, height: 480)
-        .onAppear { NSApp.activate() }
-    }
-}
-
-// MARK: - About
-
-private struct AboutTab: View {
-    var body: some View {
-        VStack(spacing: 12) {
-            Image(nsImage: NSApp.applicationIconImage).resizable().frame(width: 72, height: 72)
-            Text("MeetAlert").font(.title2.bold())
-            Text("Version \(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "?")")
-                .foregroundStyle(.secondary)
-            HStack {
-                Button("About MeetAlert…") { AboutWindow.show() }
-                Button("Support on Ko-fi ☕") { NSWorkspace.shared.open(AboutInfo.kofi) }
-                    .buttonStyle(.borderedProminent)
-            }
-        }
-        .padding()
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-    }
-}
-
 // MARK: - Alerts
 
 struct AlertsTab: View {
@@ -52,6 +11,11 @@ struct AlertsTab: View {
 
     var body: some View {
         Form {
+            Section {
+                LaunchAtLoginToggle()
+            } footer: {
+                Text("MeetAlert can only alert you while it is running.").formFooter()
+            }
             Section {
                 TextField("Alert times", text: $alertMinutesText, prompt: Text("3, 0"))
                     .focused($alertMinutesFocused)
@@ -123,7 +87,7 @@ extension View {
 
 // MARK: - Ignore
 
-private struct IgnoreTab: View {
+struct IgnoreTab: View {
     @Bindable var store: Store
     @State private var upcoming: [Store.Meeting] = []
 

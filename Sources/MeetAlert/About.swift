@@ -20,8 +20,7 @@ enum AboutWindow {
             w.center()
             window = w
         }
-        NSApp.activate()
-        window?.makeKeyAndOrderFront(nil)
+        AccessoryWindows.shared.show(window!)
     }
 }
 

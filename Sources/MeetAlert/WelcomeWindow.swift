@@ -2,7 +2,26 @@ import ServiceManagement
 import SwiftUI
 
 /// First-launch welcome (MBX-18): where the icon is, what an alert looks like, how to get back in
-/// without the icon, and the login item. Shown once; wiring lives with the Settings window.
+/// without the icon (MBX-8, MBX-9), and the login item (MBX-17). Shown once from AppDelegate.
+@MainActor
+enum WelcomeWindow {
+    private static var window: NSWindow?
+
+    static func show() {
+        if window == nil {
+            let w = NSWindow(contentViewController: NSHostingController(rootView: WelcomeView(
+                onOpenSettings: { window?.close(); SettingsWindow.shared.show() },
+                onDone: { window?.close() })))
+            w.title = "Welcome"
+            w.styleMask = [.titled, .closable]
+            w.isReleasedWhenClosed = false
+            w.center()
+            window = w
+        }
+        AccessoryWindows.shared.show(window!)
+    }
+}
+
 struct WelcomeView: View {
     let onOpenSettings: () -> Void
     let onDone: () -> Void
