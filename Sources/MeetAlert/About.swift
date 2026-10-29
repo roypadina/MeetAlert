@@ -20,8 +20,7 @@ enum AboutWindow {
             w.center()
             window = w
         }
-        NSApp.activate(ignoringOtherApps: true)
-        window?.makeKeyAndOrderFront(nil)
+        if let window { AccessoryWindows.shared.show(window) }
     }
 }
 
@@ -33,6 +32,7 @@ struct AboutView: View {
             Image(nsImage: NSApp.applicationIconImage)
                 .resizable()
                 .frame(width: 96, height: 96)
+                .accessibilityHidden(true)  // decorative; the title below names the app
 
             VStack(spacing: 2) {
                 Text("MeetAlert").font(.title.bold())

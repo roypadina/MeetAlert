@@ -2,81 +2,51 @@ import AppKit
 import EventKit
 import SwiftUI
 
-struct SettingsView: View {
-    @Bindable var store: Store
-
-    var body: some View {
-        TabView {
-            AlertsTab(store: store)
-                .tabItem { Label("Alerts", systemImage: "bell.badge") }
-            IgnoreTab(store: store)
-                .tabItem { Label("Ignore", systemImage: "bell.slash") }
-            CalendarsTab(store: store)
-                .tabItem { Label("Calendars", systemImage: "calendar") }
-            PhoneTab(store: store)
-                .tabItem { Label("Phone", systemImage: "iphone") }
-            AboutTab()
-                .tabItem { Label("About", systemImage: "info.circle") }
-        }
-        .frame(width: 520, height: 480)
-        .onAppear { NSApp.activate(ignoringOtherApps: true) }
-    }
-}
-
-// MARK: - About
-
-private struct AboutTab: View {
-    var body: some View {
-        VStack(spacing: 12) {
-            Image(nsImage: NSApp.applicationIconImage).resizable().frame(width: 72, height: 72)
-            Text("MeetAlert").font(.title2.bold())
-            Text("Version \(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "?")")
-                .foregroundStyle(.secondary)
-            HStack {
-                Button("About MeetAlert…") { AboutWindow.show() }
-                Button("Support on Ko-fi ☕") { NSWorkspace.shared.open(AboutInfo.kofi) }
-                    .buttonStyle(.borderedProminent)
-            }
-        }
-        .padding()
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-    }
-}
-
 // MARK: - Alerts
 
 struct AlertsTab: View {
     @Bindable var store: Store
     @State private var alertMinutesText = ""
+    @State private var alertMinutesError: String?
     @FocusState private var alertMinutesFocused: Bool
 
     var body: some View {
         Form {
             Section {
+                LaunchAtLoginToggle()
+            } footer: {
+                Text("MeetAlert can only alert you while it is running.").formFooter()
+            }
+            Section {
                 TextField("Alert times", text: $alertMinutesText, prompt: Text("3, 0"))
                     .focused($alertMinutesFocused)
                     .onSubmit { commitAlertMinutes() }
             } header: {
-                Text("When to alert")
+                Text("When to Alert")
             } footer: {
-                Text("Comma-separated minutes before the meeting starts. 0 = at start, negative = after start (a late nag). Example: 10, 3, 0, -5.")
+                VStack(alignment: .leading, spacing: 4) {
+                    if let alertMinutesError {
+                        Label(alertMinutesError, systemImage: "exclamationmark.triangle").formFooter()
+                    }
+                    Text("Comma-separated minutes before the meeting starts. 0 = at start, negative = after start (a late nag). Example: 10, 3, 0, -5.").formFooter()
+                }
             }
-            Section("Timing") {
-                Stepper(value: $store.config.lateAlertMinutes, in: 2...30) {
-                    labeled("Catch up late alerts", "Still fire an alert up to \(store.config.lateAlertMinutes) min after its time (calendar sync lag).")
-                }
-                Stepper(value: $store.config.escalationSeconds, in: 30...600, step: 30) {
-                    labeled("Escalate after \(store.config.escalationSeconds)s", "No ack in time → urgent re-push to the phone.")
-                }
-                Stepper(value: $store.config.escalationRepeats, in: 1...20) {
-                    labeled("Re-push up to \(store.config.escalationRepeats)×", "Own the repetition here instead of the phone's insistent ring — an ACK stops it, insistent can't be stopped.")
-                }
-                Stepper(value: $store.config.awayIdleSeconds, in: 60...600, step: 30) {
-                    labeled("Away after \(store.config.awayIdleSeconds)s idle", "Idle or locked this long → first push already goes out urgent.")
-                }
-                Stepper(value: $store.config.travelLeadMinutes, in: 10...120, step: 5) {
-                    labeled("Travel lead \(store.config.travelLeadMinutes) min", "Extra early alert for meetings with a physical address.")
-                }
+            Section {
+                stepperRow("Catch up late alerts", "Still fire a missed alert this long after its time (calendar sync lag).",
+                           value: $store.config.lateAlertMinutes, in: 2...30, unit: " min")
+                stepperRow("Escalate after", "No acknowledgement in time → urgent re-push to the phone.",
+                           value: $store.config.escalationSeconds, in: 30...600, step: 30, unit: " s")
+                stepperRow("Re-push up to", "Repeats here instead of the phone's insistent ring — an ACK stops these, the ring can't be stopped.",
+                           value: $store.config.escalationRepeats, in: 1...20, unit: "×")
+                stepperRow("Away after idle", "Idle or locked this long → the first push already goes out urgent.",
+                           value: $store.config.awayIdleSeconds, in: 60...600, step: 30, unit: " s")
+                stepperRow("Travel lead", "Extra early alert for meetings with a physical address.",
+                           value: $store.config.travelLeadMinutes, in: 10...120, step: 5, unit: " min")
+            } header: {
+                Text("Timing")
+            } footer: {
+                // The panel's shortcuts, listed once (KBD-1); each button's tooltip repeats its own.
+                Text("In an alert: Return joins, 5 or Esc snoozes 5 minutes, ⌘D dismisses, ⌘⇧I ignores. More holds J (join), 1 (snooze 1 minute) and T (until start).").formFooter()
             }
         }
         .formStyle(.grouped)
@@ -94,26 +64,48 @@ struct AlertsTab: View {
     /// (e.g. building up "-5") never gets silently eaten mid-edit. Unparseable/empty input reverts
     /// the field to whatever's currently in config rather than clobbering it.
     private func commitAlertMinutes() {
-        let mins = alertMinutesText.split(separator: ",").compactMap { Int($0.trimmingCharacters(in: .whitespaces)) }
+        let parts = alertMinutesText.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
+        let mins = parts.compactMap { Int($0) }
         if !mins.isEmpty {
             store.config.alertMinutesBefore = Store.Config.normalized(mins)
         }
+        let typed = alertMinutesText
         alertMinutesText = formattedAlertMinutes
+        // Say what was dropped instead of silently rewriting the field (FLW-23).
+        alertMinutesError = mins.count == parts.count ? nil
+            : "“\(typed)” isn't a list of whole minutes, so \(alertMinutesText) was kept."
     }
 }
 
-/// Title + secondary explanation line, the visual pattern every stepper row shares.
-private func labeled(_ title: String, _ subtitle: String) -> some View {
-    VStack(alignment: .leading, spacing: 2) {
+/// Title + subtitle on the leading side (a Form styles the second Text as a subtitle), the current
+/// value right next to its stepper on the trailing side so values line up down the column.
+private func stepperRow(_ title: String, _ subtitle: String, value: Binding<Int>, in range: ClosedRange<Int>,
+                        step: Int = 1, unit: String) -> some View {
+    LabeledContent {
+        HStack(spacing: 6) {
+            Text("\(value.wrappedValue)\(unit)").monospacedDigit()
+            Stepper(title, value: value, in: range, step: step).labelsHidden()
+        }
+    } label: {
         Text(title)
-        Text(subtitle).font(.caption).foregroundStyle(.secondary)
+        Text(subtitle)
+    }
+}
+
+extension View {
+    /// Grouped-form footers default to trailing-aligned body text; Apple's are leading, small, secondary.
+    func formFooter() -> some View {
+        font(.subheadline).foregroundStyle(.secondary).multilineTextAlignment(.leading)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 10)  // line up with the section header and row text, not the card edge
     }
 }
 
 // MARK: - Ignore
 
-private struct IgnoreTab: View {
+struct IgnoreTab: View {
     @Bindable var store: Store
+    @Environment(\.undoManager) private var undoManager
     @State private var upcoming: [Store.Meeting] = []
 
     var body: some View {
@@ -124,7 +116,7 @@ private struct IgnoreTab: View {
             } header: {
                 Text("Filters")
             } footer: {
-                Text("Comma-separated. Any meeting whose title contains one of these is never alerted — this is also how you pre-ignore a whole class of meetings.")
+                Text("Comma-separated. Any meeting whose title contains one of these is never alerted — this is also how you pre-ignore a whole class of meetings.").formFooter()
             }
 
             Section {
@@ -141,8 +133,8 @@ private struct IgnoreTab: View {
                         Spacer()
                         if m.seriesId != nil {
                             Menu("Ignore") {
-                                Button("This time only") { store.ignoreOccurrence(m); reload() }
-                                Button("Whole series") { store.ignoreSeries(m); reload() }
+                                Button("This Time Only") { store.ignoreOccurrence(m); reload() }
+                                Button("Whole Series") { store.ignoreSeries(m); reload() }
                             }
                             .fixedSize()
                         } else {
@@ -151,9 +143,9 @@ private struct IgnoreTab: View {
                     }
                 }
             } header: {
-                Text("Upcoming — next 7 days")
+                Text("Upcoming — Next 7 Days")
             } footer: {
-                Text("Pre-ignore a specific meeting before it ever alerts. Recurring meetings can be ignored once or as a whole series.")
+                Text("Pre-ignore a specific meeting before it ever alerts. Recurring meetings can be ignored once or as a whole series.").formFooter()
             }
 
             Section {
@@ -165,19 +157,24 @@ private struct IgnoreTab: View {
                     HStack {
                         Text(entry.label)
                         Spacer()
-                        Button {
-                            store.unignore(entry.id); reload()
-                        } label: {
-                            Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary)
+                        Button("Stop Ignoring", systemImage: "xmark.circle.fill") {
+                            let restore = store.unignore(entry.id); reload()
+                            // One click removes it, so offer Undo (UND-4): Edit > Undo Stop Ignoring, ⌘Z.
+                            undoManager?.registerUndo(withTarget: store) { _ in restore(); reload() }
+                            undoManager?.setActionName("Stop Ignoring")
                         }
+                        .labelStyle(.iconOnly)
+                        .foregroundStyle(.secondary)
                         .buttonStyle(.plain)
-                        .help("Stop ignoring")
+                        .frame(minWidth: 20, minHeight: 20)
+                        .contentShape(Rectangle())
+                        .help("Stop ignoring \(entry.label)")
                     }
                 }
             } header: {
-                Text("Currently ignored")
+                Text("Currently Ignored")
             } footer: {
-                Text("One-off entries clean themselves up a day after the meeting passes; series entries stay until removed here.")
+                Text("One-off entries clean themselves up a day after the meeting passes; series entries stay until removed here.").formFooter()
             }
         }
         .formStyle(.grouped)
@@ -210,7 +207,17 @@ struct CalendarsTab: View {
             let groups = store.calendarsBySource()
             if groups.isEmpty {
                 Section("Calendars") {
-                    Text("No calendar access")
+                    if store.calendarAccessDenied {
+                        LabeledContent {
+                            Button("Open System Settings") { Self.openCalendarPrivacy() }
+                        } label: {
+                            Label("Calendar access is off", systemImage: "exclamationmark.triangle")
+                            Text("MeetAlert can't see any meetings, so it can't alert you. Allow MeetAlert under Privacy & Security > Calendars.")
+                        }
+                    } else {
+                        Text("No calendars yet. Add an account in System Settings > Internet Accounts.")
+                            .foregroundStyle(.secondary)
+                    }
                 }
             } else {
                 ForEach(groups, id: \.title) { group in
@@ -232,6 +239,13 @@ struct CalendarsTab: View {
             }
         }
         .formStyle(.grouped)
+    }
+
+    static func openCalendarPrivacy() {
+        let pane = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Calendars")!
+        if !NSWorkspace.shared.open(pane) {
+            NSWorkspace.shared.open(URL(fileURLWithPath: "/System/Applications/System Settings.app"))
+        }
     }
 
     private func colorBinding(_ cal: EKCalendar) -> Binding<Color> {
@@ -262,7 +276,7 @@ struct CalendarsTab: View {
 
 struct PhoneTab: View {
     @Bindable var store: Store
-    @State private var testPushResult: String?
+    @State private var testPushResult: Bool?
 
     var body: some View {
         Form {
@@ -272,20 +286,23 @@ struct PhoneTab: View {
                 SecureField("Access token (optional)", text: $store.config.ntfyToken)
                 SecureField("Fallback topic URL (optional)", text: $store.config.ntfyFallbackURL, prompt: Text("https://ntfy.sh/…"))
                 HStack {
-                    Button("Send test push") {
-                        Task {
-                            let ok = await store.sendTestPush()
-                            testPushResult = ok ? "sent ✓" : "failed ✗"
-                        }
+                    Button("Send Test Push") {
+                        Task { testPushResult = await store.sendTestPush() }
                     }
-                    if let testPushResult {
-                        Text(testPushResult).foregroundStyle(.secondary)
+                    if let ok = testPushResult {
+                        Label {
+                            Text(ok ? "Sent. Check your phone." : "Couldn't send. Check the server, topic and token, then try again.")
+                        } icon: {
+                            Image(systemName: ok ? "checkmark.circle" : "exclamationmark.triangle.fill")
+                                .foregroundStyle(ok ? Color.secondary : Color.red)
+                        }
+                        .font(.callout)
                     }
                 }
             } header: {
                 Text("ntfy")
             } footer: {
-                Text("Pushes go to this topic with tappable ACK / Join / Snooze actions. Keep the topic private — anyone who knows it can read it. The access token (for a password-protected server) and the fallback topic URL (used, without actions, when the main server can't be reached) are kept in the macOS Keychain, not in config.json.")
+                Text("Pushes go to this topic with tappable ACK / Join / Snooze actions. Keep the topic private — anyone who knows it can read it. The access token (for a password-protected server) and the fallback topic URL (used, without actions, when the main server can't be reached) are kept in the macOS Keychain, not in config.json.").formFooter()
             }
 
             Section {
@@ -294,9 +311,9 @@ struct PhoneTab: View {
                     DatePicker("Send at", selection: agendaDateBinding, displayedComponents: .hourAndMinute)
                 }
             } header: {
-                Text("Morning agenda")
+                Text("Morning Agenda")
             } footer: {
-                Text("One push per day at this time: today's meeting count, the first one, up to 6 upcoming, and your largest free gap.")
+                Text("One push per day at this time: today's meeting count, the first one, up to 6 upcoming, and your largest free gap.").formFooter()
             }
         }
         .formStyle(.grouped)

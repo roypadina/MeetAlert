@@ -64,7 +64,7 @@ brew install --cask roypadina/tap/meetalert
 - Reads **every calendar macOS syncs** — Google, iCloud, Exchange, CalDAV — with zero API setup, and skips meetings you've declined. See [below](#google-calendar-and-any-other-calendar).
 - **Travel-lead alerts** for meetings with a physical address — one extra early alert to account for getting there.
 - Per-calendar checklist, all-day filtering, and keyword-based ignore list.
-- Menu-bar countdown to your next meeting (or time left in the one you're in), with the icon itself carrying the state — plain calendar when nothing's close, a clock inside 2 hours, a badged clock inside 3 minutes, a filled clock while a meeting runs, a warning triangle if something needs attention. Starts at login, and re-scans immediately on wake.
+- Menu-bar countdown to your next meeting (or time left in the one you're in), with the icon itself carrying the state — plain calendar when nothing's close, a clock inside 2 hours, a badged clock inside 3 minutes, a filled clock while a meeting runs, a warning triangle if something needs attention. Opens at login if you choose, and re-scans immediately on wake. A **Current Alert** section in the menu has Join / Snooze / Dismiss, VoiceOver announces each alert, and `meetalert://settings|snooze|dismiss` is there for Shortcuts and Raycast.
 - Ad-hoc signed, un-notarized, no analytics, no network calls besides the ntfy push you configure.
 
 ## Install
@@ -90,11 +90,10 @@ xattr -dr com.apple.quarantine /Applications/MeetAlert.app
 ```
 
 On first launch macOS will prompt for **Calendar** access — MeetAlert can't see your meetings
-without it. It also registers itself to **start at login** automatically, but only on the very
-first launch ever — remove it later via **System Settings → General → Login Items &
-Extensions** and it stays removed; MeetAlert won't silently re-add it on a later launch. See the
-[Installation wiki page](https://github.com/roypadina/MeetAlert/wiki/Installation) if you ever
-want it back.
+without it. A **Welcome** window then offers to **open MeetAlert at login** (you can change it
+any time in Settings → Alerts, or in **System Settings → General → Login Items & Extensions**);
+MeetAlert never adds itself silently. See the
+[Installation wiki page](https://github.com/roypadina/MeetAlert/wiki/Installation).
 
 ### Build from source
 

@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.7.0] - 2026-10-29
+
+### Added
+- A **Welcome window** on first launch: what MeetAlert needs (Calendar access, optional phone push) and an **Open at Login** switch. Open at Login is also a toggle in Settings → Alerts.
+- **Current Alert** section in the status menu while an alert is up: Join, Snooze 5 Minutes and Dismiss without needing the popup.
+- VoiceOver now announces each alert when its panel appears.
+- A "Calendar Access Is Off" row in the status menu with a button to open the right page in System Settings.
+- **Undo** for Stop Ignoring in Settings → Ignore.
+- `meetalert://` URL scheme for Shortcuts, Raycast and `open`: `meetalert://settings`, `meetalert://snooze` (current alert, 5 minutes) and `meetalert://dismiss`.
+- New **Liquid Glass app icon** with Default, Dark, Clear and Tinted looks (macOS 26 and later; earlier macOS keeps the classic icon).
+- The popup's keyboard shortcuts are listed in Settings → Alerts, and the popup buttons show them as tooltips.
+- A "Phone Push Failed" status-menu row that opens Settings; unparseable alert times are named instead of silently reverted.
+
+### Changed
+- Settings is now its own window with toolbar tabs (Alerts, Ignore, Calendars, Phone) that comes to the front and remembers the last tab. Reopening MeetAlert from Finder, Raycast or the Dock opens Settings. The About tab is gone; About stays in the status menu.
+- The Dock icon appears while a MeetAlert window is open and disappears again when the last one closes.
+- MeetAlert no longer adds itself to Login Items silently; you choose in the Welcome window or Settings → Alerts.
+- Status menu: shorter status text, **Settings…** (⌘,) and **Quit MeetAlert** (⌘Q), a "Next Up" header, outline video symbol, menu icons kept on macOS 27, **Edit Config File…**.
+- Title-case labels and clearer footers across Settings; the test-push result says what to check.
+- Alerts pane height fits its content.
+
+### Fixed
+- Accessibility: stronger signal colours with Increase Contrast, a higher-contrast light "calm" blue, the popup's hidden Esc button no longer shows up in VoiceOver, no hover brightening that hid state.
+- Uses the current window-activation call, deprecated in macOS 27.
+
 ## [1.6.1] - 2026-10-27
 
 ### Fixed

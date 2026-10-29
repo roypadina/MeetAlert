@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <path fill="#FFFFFF" fill-rule="evenodd" d="M300 330 a40 40 0 0 1 40 -40 h300 a40 40 0 0 1 40 40 v300 a40 40 0 0 1 -40 40 h-300 a40 40 0 0 1 -40 -40 z
+    M352 384 h236 a16 16 0 0 1 0 32 h-236 a16 16 0 0 1 0 -32 z
+    M352 448 h150 a16 16 0 0 1 0 32 h-150 a16 16 0 0 1 0 -32 z
+    M352 512 h110 a16 16 0 0 1 0 32 h-110 a16 16 0 0 1 0 -32 z"/>
+  <rect x="368" y="250" width="32" height="72" rx="16" fill="#FFFFFF"/>
+  <rect x="540" y="250" width="32" height="72" rx="16" fill="#FFFFFF"/>
+</svg>

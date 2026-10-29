@@ -1,14 +1,23 @@
 import AppKit
 import SwiftUI
 
-/// One dynamic colour from a light/dark pair — same mechanism the system uses for semantic colours,
-/// so every Color below flips with the appearance automatically (no @Environment plumbing).
-private func dyn(light: NSColor, dark: NSColor) -> Color {
-    Color(nsColor: NSColor(name: nil) { $0.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua ? dark : light })
+/// One dynamic colour from a light/dark pair (plus optional Increase Contrast variants) — same
+/// mechanism the system uses for semantic colours, so every Color below flips with the appearance
+/// automatically (no @Environment plumbing).
+private func dyn(light: NSColor, dark: NSColor, hcLight: NSColor? = nil, hcDark: NSColor? = nil) -> Color {
+    Color(nsColor: NSColor(name: nil) {
+        switch $0.bestMatch(from: [.aqua, .darkAqua, .accessibilityHighContrastAqua, .accessibilityHighContrastDarkAqua]) {
+        case .darkAqua: dark
+        case .accessibilityHighContrastAqua: hcLight ?? light
+        case .accessibilityHighContrastDarkAqua: hcDark ?? dark
+        default: light
+        }
+    })
 }
 
 /// Alert-panel look: one signal hue per urgency, ink base over material, rounded instrument type.
-/// Values only — no layout, no behaviour. Contrast noted per colour; all pairs ≥ 4.9:1.
+/// Values only — no layout, no behaviour. Light contrast is measured on #ECECEC (windowBackgroundColor,
+/// the Increase Contrast fill — darker than the panel's usual white-tinted material), not on pure white.
 enum Theme {
     /// Panel base tint over .regularMaterial. Navy-ink, not neutral black.
     static let ink = dyn(light: NSColor(red: 1.00, green: 1.00, blue: 1.00, alpha: 0.45),
@@ -16,12 +25,18 @@ enum Theme {
 
     /// Urgency signal hues. Dark variants are bright (used on dark ink); light variants are deep
     /// (used on near-white). Text placed ON a signal fill uses `onSignal`.
-    static let calm = dyn(light: NSColor(red: 0.00, green: 0.48, blue: 0.60, alpha: 1),   // #007A99  4.9:1 on white
-                          dark: NSColor(red: 0.24, green: 0.88, blue: 1.00, alpha: 1))    // #3DE1FF 12.4:1 on ink
-    static let imminent = dyn(light: NSColor(red: 0.60, green: 0.36, blue: 0.00, alpha: 1), // #9A5B00  5.9:1 on white
-                              dark: NSColor(red: 1.00, green: 0.70, blue: 0.14, alpha: 1))  // #FFB224 10.1:1 on ink
-    static let started = dyn(light: NSColor(red: 0.77, green: 0.12, blue: 0.09, alpha: 1),  // #C41E17  6.1:1 on white
-                             dark: NSColor(red: 1.00, green: 0.35, blue: 0.31, alpha: 1))   // #FF5A4E  5.5:1 on ink
+    static let calm = dyn(light: NSColor(red: 0.00, green: 0.416, blue: 0.522, alpha: 1), // #006A85  5.2:1 on #ECECEC
+                          dark: NSColor(red: 0.24, green: 0.88, blue: 1.00, alpha: 1),     // #3DE1FF 12.4:1 on ink
+                          hcLight: NSColor(red: 0.00, green: 0.35, blue: 0.44, alpha: 1),  // #005A70
+                          hcDark: NSColor(red: 0.50, green: 0.92, blue: 1.00, alpha: 1))   // #7FEBFF
+    static let imminent = dyn(light: NSColor(red: 0.60, green: 0.36, blue: 0.00, alpha: 1), // #9A5B00  4.6:1 on #ECECEC
+                              dark: NSColor(red: 1.00, green: 0.70, blue: 0.14, alpha: 1),  // #FFB224 10.1:1 on ink
+                              hcLight: NSColor(red: 0.48, green: 0.28, blue: 0.00, alpha: 1), // #7A4800
+                              hcDark: NSColor(red: 1.00, green: 0.78, blue: 0.39, alpha: 1))  // #FFC864
+    static let started = dyn(light: NSColor(red: 0.77, green: 0.12, blue: 0.09, alpha: 1),  // #C41E17  5.0:1 on #ECECEC
+                             dark: NSColor(red: 1.00, green: 0.35, blue: 0.31, alpha: 1),   // #FF5A4E  5.5:1 on ink
+                             hcLight: NSColor(red: 0.62, green: 0.08, blue: 0.06, alpha: 1), // #9E1410
+                             hcDark: NSColor(red: 1.00, green: 0.54, blue: 0.50, alpha: 1))  // #FF8A80
     /// Ink text on the bright dark-mode fills (≥6.5:1), white on the deep light-mode fills (≥4.9:1).
     static let onSignal = dyn(light: .white, dark: NSColor(red: 0.05, green: 0.07, blue: 0.13, alpha: 1))
 

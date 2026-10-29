@@ -3,7 +3,6 @@ import CoreGraphics
 import EventKit
 import Foundation
 import Observation
-import ServiceManagement
 
 // Private API, no public header. @_silgen_name would hard-link the symbol at load time — if it
 // ever vanishes from a future macOS, the WHOLE APP fails to launch. Resolve it lazily via dlsym
@@ -152,6 +151,9 @@ final class Store {
     var upcomingList: [Meeting] = []
     var calendarAccessDenied = false
     var calendarSelectionBroken = false  // calendarIds resolved to zero live calendars (e.g. account re-added, ids rotated)
+    /// Alerts whose panel is on screen, oldest first — mirrored in the status menu so keyboard-only
+    /// users can act on them (the panel itself is mouse-only until clicked).
+    var showingAlerts: [(key: String, meeting: Meeting)] = []
     var lastPushFailed = false  // last ntfy publish attempt (with a topic configured) didn't succeed
 
     private let testMode = ProcessInfo.processInfo.environment["MEETALERT_TEST"] == "1"
@@ -185,14 +187,6 @@ final class Store {
         if testMode {
             scheduleTestMeeting()
             return
-        }
-        // Register for login exactly once, ever — re-checking `.enabled` on every launch meant a
-        // user who removed it via System Settings got it silently re-added on the next launch.
-        if !UserDefaults.standard.bool(forKey: "didRegisterLoginItem") {
-            UserDefaults.standard.set(true, forKey: "didRegisterLoginItem")
-            if SMAppService.mainApp.status != .enabled {
-                try? SMAppService.mainApp.register()
-            }
         }
         Task { await requestAccessAndTick() }
         NotificationCenter.default.addObserver(forName: .EKEventStoreChanged, object: nil, queue: .main) { [weak self] _ in
@@ -485,9 +479,9 @@ final class Store {
         return secondsLeft <= 180 ? "clock.badge.exclamationmark" : "clock"
     }
 
-    /// Keeps one meeting from eating half the menu bar.
+    /// Keeps one meeting from eating half the menu bar (a notched Mac drops wide items).
     private static func short(_ title: String) -> String {
-        title.count <= 28 ? title : String(title.prefix(27)) + "…"
+        title.count <= 16 ? title : String(title.prefix(15)) + "…"
     }
 
     private func menuBarTextFor(_ list: [Meeting], now: Date) -> String {
@@ -495,7 +489,7 @@ final class Store {
         if current.start <= now, now < current.end {
             let minsLeft = Int(ceil(current.end.timeIntervalSince(now) / 60))
             if let next = list.dropFirst().first, next.start.timeIntervalSince(now) <= 2 * 3600 {
-                return "\(minsLeft)m left → \(next.start.formatted(date: .omitted, time: .shortened)) \(Self.short(next.title))"
+                return "\(minsLeft)m left → \(next.start.formatted(date: .omitted, time: .shortened))"
             }
             return "\(minsLeft)m left · \(Self.short(current.title))"
         }
@@ -577,6 +571,7 @@ final class Store {
 
     /// token == nil means "re-show a snoozed panel" (no ntfy, no escalation).
     private func showPanel(_ m: Meeting, alertKey: String, token: String?) {
+        if !showingAlerts.contains(where: { $0.key == alertKey }) { showingAlerts.append((alertKey, m)) }
         AlertPanel.show(m, alertKey: alertKey,
             onAck: { [weak self] in self?.ack(alertKey) },
             onSnooze: { [weak self] minutes in self?.snooze(m, alertKey: alertKey, minutes: minutes) },
@@ -597,6 +592,7 @@ final class Store {
         escalationTasks[key]?.cancel()
         escalationTasks.removeValue(forKey: key)
         AlertPanel.dismiss(key: key)  // a phone ACK/snooze closes the desktop panel too, not just escalation
+        showingAlerts.removeAll { $0.key == key }
         if testMode { emit("acked \(Self.hashToken(key))") }
     }
 
@@ -652,12 +648,22 @@ final class Store {
         tick()
     }
 
-    func unignore(_ id: String) {
-        persisted.ignoredKeys.remove(id)
-        persisted.ignoredSeriesIds.remove(id)
-        persisted.ignoredTitles.removeValue(forKey: id)
+    /// Returns a closure that puts the entry back exactly as it was (Settings' Undo).
+    @discardableResult
+    func unignore(_ id: String) -> () -> Void {
+        let wasKey = persisted.ignoredKeys.remove(id) != nil
+        let wasSeries = persisted.ignoredSeriesIds.remove(id) != nil
+        let label = persisted.ignoredTitles.removeValue(forKey: id)
         saveState()
         tick()
+        return { [weak self] in
+            guard let self else { return }
+            if wasKey { persisted.ignoredKeys.insert(id) }
+            if wasSeries { persisted.ignoredSeriesIds.insert(id) }
+            if let label { persisted.ignoredTitles[id] = label }
+            saveState()
+            tick()
+        }
     }
 
     /// Everything currently ignored, labeled for the Settings list (raw id as fallback for
