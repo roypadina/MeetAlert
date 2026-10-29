@@ -41,6 +41,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         WelcomeWindow.show()
     }
 
+    /// Automation surface (STR-6) for Shortcuts, Raycast, `open`: meetalert://settings,
+    /// meetalert://snooze (current alert, 5 min), meetalert://dismiss (current alert).
+    @MainActor func application(_ application: NSApplication, open urls: [URL]) {
+        guard let store = SettingsWindow.shared.store else { return }
+        for url in urls where url.scheme == "meetalert" {
+            let alert = store.showingAlerts.first
+            switch url.host {
+            case "settings": SettingsWindow.shared.show()
+            case "snooze": if let alert { store.snooze(alert.meeting, alertKey: alert.key, minutes: 5) }
+            case "dismiss": if let alert { store.ack(alert.key) }
+            default: break
+            }
+        }
+    }
+
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { false }
 
     /// Opening MeetAlert again (Finder, Raycast) shows Settings: the way in when the icon is hidden (MBX-8).
