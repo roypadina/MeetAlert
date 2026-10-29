@@ -127,6 +127,7 @@ private struct MenuContent: View {
         Button("Edit Config File…") { NSWorkspace.shared.open(Store.configURL) }
         Divider()
         Button("About MeetAlert") { AboutWindow.show() }
+        Button("Welcome Guide…") { WelcomeWindow.show() }
         Button("Support on Ko-fi ☕") { NSWorkspace.shared.open(AboutInfo.kofi) }
         Button("Quit MeetAlert") { NSApp.terminate(nil) }.keyboardShortcut("q")
     }
