@@ -648,12 +648,22 @@ final class Store {
         tick()
     }
 
-    func unignore(_ id: String) {
-        persisted.ignoredKeys.remove(id)
-        persisted.ignoredSeriesIds.remove(id)
-        persisted.ignoredTitles.removeValue(forKey: id)
+    /// Returns a closure that puts the entry back exactly as it was (Settings' Undo).
+    @discardableResult
+    func unignore(_ id: String) -> () -> Void {
+        let wasKey = persisted.ignoredKeys.remove(id) != nil
+        let wasSeries = persisted.ignoredSeriesIds.remove(id) != nil
+        let label = persisted.ignoredTitles.removeValue(forKey: id)
         saveState()
         tick()
+        return { [weak self] in
+            guard let self else { return }
+            if wasKey { persisted.ignoredKeys.insert(id) }
+            if wasSeries { persisted.ignoredSeriesIds.insert(id) }
+            if let label { persisted.ignoredTitles[id] = label }
+            saveState()
+            tick()
+        }
     }
 
     /// Everything currently ignored, labeled for the Settings list (raw id as fallback for

@@ -105,6 +105,7 @@ extension View {
 
 struct IgnoreTab: View {
     @Bindable var store: Store
+    @Environment(\.undoManager) private var undoManager
     @State private var upcoming: [Store.Meeting] = []
 
     var body: some View {
@@ -157,7 +158,10 @@ struct IgnoreTab: View {
                         Text(entry.label)
                         Spacer()
                         Button("Stop Ignoring", systemImage: "xmark.circle.fill") {
-                            store.unignore(entry.id); reload()
+                            let restore = store.unignore(entry.id); reload()
+                            // One click removes it, so offer Undo (UND-4): Edit > Undo Stop Ignoring, ⌘Z.
+                            undoManager?.registerUndo(withTarget: store) { _ in restore(); reload() }
+                            undoManager?.setActionName("Stop Ignoring")
                         }
                         .labelStyle(.iconOnly)
                         .foregroundStyle(.secondary)
