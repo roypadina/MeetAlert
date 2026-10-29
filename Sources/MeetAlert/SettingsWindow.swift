@@ -27,10 +27,11 @@ final class AccessoryWindows: NSObject, NSWindowDelegate {
 @MainActor
 final class SettingsWindow {
     static let shared = SettingsWindow()
-    var store: Store!  // set once in MeetAlertApp.init
+    var store: Store?  // set once in MeetAlertApp.init
     private var window: NSWindow?
 
     func show() {
+        guard let store else { return }
         if window == nil {
             let tabs = SettingsTabs()
             tabs.tabStyle = .toolbar
@@ -53,7 +54,7 @@ final class SettingsWindow {
             w.setFrameAutosaveName("SettingsWindow")
             window = w
         }
-        AccessoryWindows.shared.show(window!)
+        if let window { AccessoryWindows.shared.show(window) }
     }
 
     private func add(_ tabs: NSTabViewController, _ label: String, _ symbol: String, _ pane: some View, height: CGFloat) {

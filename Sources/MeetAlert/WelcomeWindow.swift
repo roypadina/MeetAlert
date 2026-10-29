@@ -18,7 +18,7 @@ enum WelcomeWindow {
             w.center()
             window = w
         }
-        AccessoryWindows.shared.show(window!)
+        if let window { AccessoryWindows.shared.show(window) }
     }
 }
 

@@ -151,6 +151,9 @@ final class Store {
     var upcomingList: [Meeting] = []
     var calendarAccessDenied = false
     var calendarSelectionBroken = false  // calendarIds resolved to zero live calendars (e.g. account re-added, ids rotated)
+    /// Alerts whose panel is on screen, oldest first — mirrored in the status menu so keyboard-only
+    /// users can act on them (the panel itself is mouse-only until clicked).
+    var showingAlerts: [(key: String, meeting: Meeting)] = []
     var lastPushFailed = false  // last ntfy publish attempt (with a topic configured) didn't succeed
 
     private let testMode = ProcessInfo.processInfo.environment["MEETALERT_TEST"] == "1"
@@ -568,6 +571,7 @@ final class Store {
 
     /// token == nil means "re-show a snoozed panel" (no ntfy, no escalation).
     private func showPanel(_ m: Meeting, alertKey: String, token: String?) {
+        if !showingAlerts.contains(where: { $0.key == alertKey }) { showingAlerts.append((alertKey, m)) }
         AlertPanel.show(m, alertKey: alertKey,
             onAck: { [weak self] in self?.ack(alertKey) },
             onSnooze: { [weak self] minutes in self?.snooze(m, alertKey: alertKey, minutes: minutes) },
@@ -588,6 +592,7 @@ final class Store {
         escalationTasks[key]?.cancel()
         escalationTasks.removeValue(forKey: key)
         AlertPanel.dismiss(key: key)  // a phone ACK/snooze closes the desktop panel too, not just escalation
+        showingAlerts.removeAll { $0.key == key }
         if testMode { emit("acked \(Self.hashToken(key))") }
     }
 

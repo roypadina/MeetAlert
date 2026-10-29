@@ -54,6 +54,17 @@ private struct MenuContent: View {
     let store: Store
 
     var body: some View {
+        // Every panel action is also here: the panel never takes keyboard focus on its own (A11Y-8, MNU-2).
+        if let alert = store.showingAlerts.first {
+            Section("Current Alert") {
+                if let url = alert.meeting.joinURL {
+                    Button("Join \(Ntfy.provider(for: url))") { NSWorkspace.shared.open(url); store.ack(alert.key) }
+                }
+                Button("Snooze 5 Minutes") { store.snooze(alert.meeting, alertKey: alert.key, minutes: 5) }
+                Button("Dismiss \(alert.meeting.title)") { store.ack(alert.key) }
+            }
+            Divider()
+        }
         Section("Next Up") {
             if store.upcomingList.isEmpty {
                 Text("No upcoming meetings")

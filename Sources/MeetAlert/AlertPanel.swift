@@ -76,6 +76,10 @@ enum AlertPanel {
             panel.animator().setFrame(final, display: true)
         }
 
+        // The panel never takes VoiceOver focus (non-activating, app never active): speak it (A11Y-6).
+        let when = m.start <= Date() ? "started" : "starts at \(m.start.formatted(date: .omitted, time: .shortened))"
+        AccessibilityNotification.Announcement("Meeting alert: \(m.title), \(when)").post()
+
         // Rising fanfare for an alert that is already late, the familiar Funk for one still ahead.
         NSSound(named: m.start <= Date() ? "Hero" : "Funk")?.play()
     }

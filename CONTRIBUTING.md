@@ -35,6 +35,8 @@ substitutes for one.
 2. Make your change. Run `./build.sh` — it must exit 0.
 3. Exercise the change with `MEETALERT_TEST=1` (see [Testing](README.md#testing)) where it
    applies.
+   UI changes: run Xcode's Accessibility Inspector > Audit on the alert panel and each Settings
+   tab, and one VoiceOver pass (SwiftPM has no UI-test runner for `performAccessibilityAudit()`).
 4. Follow the existing code style (match surrounding code; no force-unwraps in non-test code).
 5. Commit with a clear message and open a **Pull Request** against `main`.
 6. CI must be green and the maintainer must approve before merge.
