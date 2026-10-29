@@ -14,7 +14,7 @@ struct SettingsView: View {
             CalendarsTab(store: store)
                 .tabItem { Label("Calendars", systemImage: "calendar") }
             PhoneTab(store: store)
-                .tabItem { Label("Phone", systemImage: "iphone") }
+                .tabItem { Label("Phone", systemImage: "bell.and.waves.left.and.right") }
             AboutTab()
                 .tabItem { Label("About", systemImage: "info.circle") }
         }

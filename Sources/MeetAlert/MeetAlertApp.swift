@@ -31,7 +31,7 @@ private struct MenuContent: View {
     let store: Store
 
     var body: some View {
-        Section("Next up") {
+        Section("Next Up") {
             if store.upcomingList.isEmpty {
                 Text("No upcoming meetings")
             }
@@ -41,17 +41,19 @@ private struct MenuContent: View {
                 // just "open the link" — it does NOT ack the meeting, so the alert still fires later.
                 if let url = m.joinURL {
                     Button { NSWorkspace.shared.open(url) } label: {
-                        Label("\(row)  — Join \(Ntfy.provider(for: url))", systemImage: "video.fill")
+                        Label("\(row)  — Join \(Ntfy.provider(for: url))", systemImage: "video")
                     }
                 } else {
                     Label(row, systemImage: m.hasPhysicalLocation ? "figure.walk" : "calendar")
                 }
             }
         }
+        .labelStyle(.titleAndIcon)  // macOS 27 hides menu item images unless opted in; in-person vs. plain lives in the icon
         if let snoozed = store.upcomingList.first(where: { store.snoozedUntilDate(for: $0.key) != nil }),
            let until = store.snoozedUntilDate(for: snoozed.key) {
             Label("Snoozed: \(snoozed.title) until \(until.formatted(date: .omitted, time: .shortened))",
                   systemImage: "zzz")
+                .labelStyle(.titleAndIcon)
         }
         // Demoted into a submenu so a long "ignore forever" sentence never dominates the top level.
         if let next = store.upcomingList.first {
@@ -62,10 +64,11 @@ private struct MenuContent: View {
         }
         if store.calendarSelectionBroken {
             Label("Calendar selection invalid — open Settings", systemImage: "exclamationmark.triangle")
+                .labelStyle(.titleAndIcon)
         }
         Divider()
         SettingsLink { Text("Settings…") }
-        Button("Edit config file…") { NSWorkspace.shared.open(Store.configURL) }
+        Button("Edit Config File…") { NSWorkspace.shared.open(Store.configURL) }
         Divider()
         Button("About MeetAlert") { AboutWindow.show() }
         Button("Support on Ko-fi ☕") { NSWorkspace.shared.open(AboutInfo.kofi) }
