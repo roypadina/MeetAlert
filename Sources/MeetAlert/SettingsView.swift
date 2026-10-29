@@ -19,7 +19,7 @@ struct SettingsView: View {
                 .tabItem { Label("About", systemImage: "info.circle") }
         }
         .frame(width: 520, height: 480)
-        .onAppear { NSApp.activate(ignoringOtherApps: true) }
+        .onAppear { NSApp.activate() }
     }
 }
 

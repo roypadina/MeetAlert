@@ -20,7 +20,7 @@ enum AboutWindow {
             w.center()
             window = w
         }
-        NSApp.activate(ignoringOtherApps: true)
+        NSApp.activate()
         window?.makeKeyAndOrderFront(nil)
     }
 }
