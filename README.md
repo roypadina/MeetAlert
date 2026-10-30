@@ -92,7 +92,8 @@ xattr -dr com.apple.quarantine /Applications/MeetAlert.app
 On first launch macOS will prompt for **Calendar** access — MeetAlert can't see your meetings
 without it. A **Welcome** window then offers to **open MeetAlert at login** (you can change it
 any time in Settings → Alerts, or in **System Settings → General → Login Items & Extensions**);
-MeetAlert never adds itself silently. See the
+MeetAlert never adds itself silently. Reopen the Welcome window any time from **Welcome Guide…** in the
+status menu. See the
 [Installation wiki page](https://github.com/roypadina/MeetAlert/wiki/Installation).
 
 ### Build from source

@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.8.0] - 2026-10-30
+
+### Added
+- The welcome window now says why MeetAlert exists and shows the app icon, a Ko-fi support box and a wider layout.
+- **Welcome Guide…** in the status menu reopens the welcome window.
+
 ## [1.7.0] - 2026-10-29
 
 ### Added
