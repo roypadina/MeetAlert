@@ -13,7 +13,7 @@
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleShortVersionString</key>
-    <string>1.8.0</string>
+    <string>1.9.0</string>
     <key>CFBundleURLTypes</key>
     <array>
         <dict>
@@ -26,11 +26,17 @@
         </dict>
     </array>
     <key>CFBundleVersion</key>
-    <string>20</string>
+    <string>21</string>
     <key>LSMinimumSystemVersion</key>
     <string>14.0</string>
     <key>LSUIElement</key>
     <true/>
+    <!-- Sparkle updates: the feed is the appcast.xml asset of the latest GitHub release. No
+         SUEnableAutomaticChecks on purpose: Sparkle asks once, since MeetAlert calls no one but your ntfy server. -->
+    <key>SUFeedURL</key>
+    <string>https://github.com/roypadina/MeetAlert/releases/latest/download/appcast.xml</string>
+    <key>SUPublicEDKey</key>
+    <string>qq4oZAVmJanKJ1bTAzGSO94WWX6cx+/5kCjBZxJXEm0=</string>
     <key>NSCalendarsFullAccessUsageDescription</key>
     <string>MeetAlert reads your calendar to warn you before meetings.</string>
 </dict>
