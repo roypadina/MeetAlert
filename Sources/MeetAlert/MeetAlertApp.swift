@@ -127,6 +127,7 @@ private struct MenuContent: View {
             Button("Phone Push Failed — Check Settings…") { SettingsWindow.shared.show() }
         }
         Divider()
+        Button(Updates.menuTitle) { Updates.check() }
         Button("Settings…") { SettingsWindow.shared.show() }.keyboardShortcut(",")
         Button("Edit Config File…") { NSWorkspace.shared.open(Store.configURL) }
         Divider()
