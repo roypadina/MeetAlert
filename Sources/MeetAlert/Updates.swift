@@ -3,16 +3,34 @@ import Sparkle
 
 /// Sparkle updater: feed URL + public key come from Info.plist.
 @MainActor enum Updates {
-    static let controller = SPUStandardUpdaterController(startingUpdater: true, updaterDelegate: nil, userDriverDelegate: presenter)
+    static let controller = SPUStandardUpdaterController(startingUpdater: true, updaterDelegate: presenter, userDriverDelegate: presenter)
     static func check() { controller.checkForUpdates(nil) }
+    /// Version of an update Sparkle found that is not installed yet; nil when none is known.
+    static var availableVersion: String? { Info.shared.version }
+    /// Observable so the SwiftUI menu re-renders when an update is found (statics aren't tracked).
+    @MainActor @Observable final class Info {
+        static let shared = Info()
+        var version: String?
+    }
+    /// Title for the status-item menu: offers a found update, else a manual check.
+    static var menuTitle: String { availableVersion.map { "Install Update \($0)…" } ?? "Check for Updates…" }
     private static let presenter = Presenter()
 
-    /// A menu-bar-only app's scheduled update alert opens behind other windows, with no Dock icon to
-    /// find it by: Dock icon + front while the alert is up, then back to accessory.
-    private final class Presenter: NSObject, SPUStandardUserDriverDelegate {
+    /// Remembers a found update for the menu, and gives the menu-bar-only app a Dock icon + front
+    /// window while an update alert is up (it would open behind other windows otherwise).
+    private final class Presenter: NSObject, SPUUpdaterDelegate, @preconcurrency SPUStandardUserDriverDelegate {
+        // Sparkle calls these on the main thread; its header just doesn't say so to Swift.
+        func updater(_ updater: SPUUpdater, didFindValidUpdate item: SUAppcastItem) {
+            let version = item.displayVersionString
+            MainActor.assumeIsolated { Info.shared.version = version }
+        }
+
+        func updaterDidNotFindUpdate(_ updater: SPUUpdater, error: any Error) {
+            MainActor.assumeIsolated { Info.shared.version = nil }
+        }
+
         var supportsGentleScheduledUpdateReminders: Bool { true }
 
-        // Sparkle calls these on the main thread; its header just doesn't say so to Swift.
         func standardUserDriverWillHandleShowingUpdate(_ handleShowingUpdate: Bool, forUpdate update: SUAppcastItem, state: SPUUserUpdateState) {
             MainActor.assumeIsolated {
                 NSApp.setActivationPolicy(.regular)
