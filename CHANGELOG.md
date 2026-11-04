@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.9.0] - 2026-11-04
+
+### Added
+- Updates from inside the app, with your permission. MeetAlert asks once, on its second launch, whether to check for updates automatically; with your yes it checks once a day (downloading the release feed from GitHub, which sends nothing about you) and asks before installing a new version. Check by hand with **Check for Updates…** in the About window. Updates are signed, keep the Calendar grant, and need no `xattr` step.
+
 ## [1.8.0] - 2026-10-30
 
 ### Added

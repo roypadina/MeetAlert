@@ -69,7 +69,7 @@ brew install --cask roypadina/tap/meetalert
 - **Travel-lead alerts** for meetings with a physical address — one extra early alert to account for getting there.
 - Per-calendar checklist, all-day filtering, and keyword-based ignore list.
 - Menu-bar countdown to your next meeting (or time left in the one you're in), with the icon itself carrying the state — plain calendar when nothing's close, a clock inside 2 hours, a badged clock inside 3 minutes, a filled clock while a meeting runs, a warning triangle if something needs attention. Opens at login if you choose, and re-scans immediately on wake. A **Current Alert** section in the menu has Join / Snooze / Dismiss, VoiceOver announces each alert, and `meetalert://settings|snooze|dismiss` is there for Shortcuts and Raycast.
-- Ad-hoc signed, un-notarized, no analytics, no network calls besides the ntfy push you configure.
+- Ad-hoc signed, un-notarized, no analytics, no network calls besides the ntfy push you configure and the update check: MeetAlert asks once (on its second launch) whether to check for updates automatically; with your yes it checks once a day by downloading the release feed from GitHub, which sends nothing about you.
 
 ## Install
 
@@ -99,6 +99,12 @@ any time in Settings → Alerts, or in **System Settings → General → Login I
 MeetAlert never adds itself silently. Reopen the Welcome window any time from **Welcome Guide…** in the
 status menu. See the
 [Installation wiki page](https://github.com/roypadina/MeetAlert/wiki/Installation).
+
+### Updating
+
+MeetAlert asks once whether to check for updates automatically; with your yes it checks once a day and asks before
+installing a new version (**Check for Updates…** in the About window checks now). An in-app update needs no `xattr`
+step and keeps the Calendar grant. Homebrew users can also run `brew upgrade --cask meetalert`.
 
 ### Build from source
 

@@ -34,6 +34,10 @@ struct MeetAlertApp: App {
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
     @MainActor func applicationDidFinishLaunching(_ notification: Notification) {
+        // Sparkle asks on the second launch before any check; never in test runs or a bare `swift run`.
+        if ProcessInfo.processInfo.environment["MEETALERT_TEST"] != "1", Bundle.main.bundleIdentifier != nil {
+            _ = Updates.controller
+        }
         // First launch only (MBX-18); never in the headless test pipeline.
         guard ProcessInfo.processInfo.environment["MEETALERT_TEST"] != "1",
               !UserDefaults.standard.bool(forKey: "didShowWelcome") else { return }
