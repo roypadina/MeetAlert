@@ -168,6 +168,17 @@ final class Store {
     private var agendaSending = false  // in-flight guard: a publish slower than one 30s tick must not double-send
     private var activityToken: NSObjectProtocol?  // held for the app's lifetime so App Nap doesn't stall the timer
 
+    private let storageDirectory: URL
+
+    // Inject initial alert state and storage so lifecycle tests need no calendar access, phone
+    // notifications, or writes to the user's config. Normal launches use the existing defaults.
+    init(configDir: URL? = nil, persisted: Persisted = Persisted(),
+         escalationTasks: [String: Task<Void, Never>] = [:]) {
+        storageDirectory = configDir ?? Self.configDir
+        self.persisted = persisted
+        self.escalationTasks = escalationTasks
+    }
+
     /// Earliest snooze-until date across every offset of a meeting occurrence — for the menu's
     /// "Snoozed:" row, which only knows the meeting key, not which offset(s) are snoozed.
     func snoozedUntilDate(for meetingKey: String) -> Date? {
@@ -599,11 +610,10 @@ final class Store {
     /// Dismiss/ACK (desktop button, phone ACK, or Join) = done with this meeting occurrence:
     /// every remaining offset is suppressed and pending snoozes for it are dropped.
     func ack(_ key: String) {
-        stopAlert(key)
-        guard let at = key.lastIndex(of: "@") else { return }
+        guard let at = key.lastIndex(of: "@") else { return stopAlert(key) }
         let meetingKey = String(key[..<at])
+        stopAlerts(for: meetingKey)
         persisted.alertedKeys.insert("\(meetingKey)@dismissed")
-        persisted.snoozedUntil = persisted.snoozedUntil.filter { !$0.key.hasPrefix("\(meetingKey)@") }
         saveState()
     }
 
@@ -641,7 +651,12 @@ final class Store {
     /// Ignore every occurrence of a recurring meeting, past and future.
     func ignoreSeries(_ m: Meeting) {
         guard let seriesId = m.seriesId else { return ignoreOccurrence(m) }
-        stopAlerts(for: m.key)
+        stopAlerts { key in
+            // Alert keys are eventIdentifier|epoch@offset; recurring occurrences share the
+            // event identifier. Match it exactly, including identifiers containing separators.
+            guard let separator = key.lastIndex(of: "|") else { return false }
+            return String(key[..<separator]) == seriesId
+        }
         persisted.ignoredSeriesIds.insert(seriesId)
         persisted.ignoredTitles[seriesId] = "\(m.title) — every occurrence"
         saveState()
@@ -683,9 +698,18 @@ final class Store {
     }
 
     private func stopAlerts(for meetingKey: String) {
-        // escalationTasks is keyed per-offset ("key@offset"), not per-meeting — cancel all of them.
-        for alertKey in escalationTasks.keys.filter({ $0 == meetingKey || $0.hasPrefix("\(meetingKey)@") }) {
+        stopAlerts { $0 == meetingKey || $0.hasPrefix("\(meetingKey)@") }
+    }
+
+    private func stopAlerts(matching matches: (String) -> Bool) {
+        // A re-shown snooze (or a panel whose escalation finished) has no escalation task.
+        // Snapshot every source before removing entries so final actions clear all reminders.
+        let keys = Set(escalationTasks.keys)
+            .union(showingAlerts.map(\.key))
+            .union(persisted.snoozedUntil.keys)
+        for alertKey in keys.filter(matches) {
             stopAlert(alertKey)
+            persisted.snoozedUntil.removeValue(forKey: alertKey)
         }
     }
 
@@ -695,8 +719,8 @@ final class Store {
     }
 
     private func loadConfigAndState() {
-        try? FileManager.default.createDirectory(at: Self.configDir, withIntermediateDirectories: true)
-        if !FileManager.default.fileExists(atPath: Self.configURL.path) {
+        try? FileManager.default.createDirectory(at: storageDirectory, withIntermediateDirectories: true)
+        if !FileManager.default.fileExists(atPath: storageDirectory.appendingPathComponent("config.json").path) {
             saveConfig()
         }
         if !testMode {  // test mode never touches the real Keychain
@@ -709,7 +733,7 @@ final class Store {
     }
 
     private func loadConfig() {
-        guard let data = try? Data(contentsOf: Self.configURL),
+        guard let data = try? Data(contentsOf: storageDirectory.appendingPathComponent("config.json")),
               var decoded = try? JSONDecoder().decode(Config.self, from: data) else { return }
         decoded.ntfyToken = config.ntfyToken  // secrets aren't in the file; keep the Keychain values
         decoded.ntfyFallbackURL = config.ntfyFallbackURL
@@ -723,11 +747,11 @@ final class Store {
             Keychain.set(Keychain.fallbackService, config.ntfyFallbackURL)
         }
         guard let data = try? JSONEncoder().encode(config) else { return }
-        try? data.write(to: Self.configURL, options: .atomic)
+        try? data.write(to: storageDirectory.appendingPathComponent("config.json"), options: .atomic)
     }
 
     private func loadState() {
-        guard let data = try? Data(contentsOf: Self.stateURL),
+        guard let data = try? Data(contentsOf: storageDirectory.appendingPathComponent("state.json")),
               let decoded = try? JSONDecoder().decode(Persisted.self, from: data) else { return }
         persisted = decoded
     }
@@ -741,7 +765,7 @@ final class Store {
             persisted.ignoredKeys.contains($0.key) || persisted.ignoredSeriesIds.contains($0.key)
         }
         guard let data = try? JSONEncoder().encode(persisted) else { return }
-        try? data.write(to: Self.stateURL, options: .atomic)
+        try? data.write(to: storageDirectory.appendingPathComponent("state.json"), options: .atomic)
     }
 
     /// Drops keys whose embedded epoch (the segment between the last "|" and an optional "@") is
