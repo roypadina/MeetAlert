@@ -327,7 +327,7 @@ final class Store {
     }
 
     /// Configured offsets, plus one extra travel-lead offset for meetings with a physical location.
-    private func offsets(for m: Meeting) -> [Int] {
+    func offsets(for m: Meeting) -> [Int] {
         m.hasPhysicalLocation ? config.alertMinutesBefore + [config.travelLeadMinutes] : config.alertMinutesBefore
     }
 
@@ -430,17 +430,25 @@ final class Store {
             }
             .map { event in
                 let epoch = Int(event.startDate.timeIntervalSince1970)
-                let location = event.location ?? ""
                 return Meeting(key: "\(event.eventIdentifier ?? event.title ?? "untitled")|\(epoch)",
                                title: event.title ?? "(untitled)",
                                start: event.startDate,
                                end: event.endDate ?? event.startDate.addingTimeInterval(3600),
-                               hasPhysicalLocation: !location.isEmpty && !location.contains("://"),
+                               hasPhysicalLocation: Self.hasPhysicalLocation(event.location),
                                joinURL: Self.extractJoinURL(event),
                                seriesId: event.hasRecurrenceRules ? event.eventIdentifier : nil,
                                calendarTitle: event.calendar?.title ?? "",
                                calendarColor: self.colorFor(event.calendar))
             }
+    }
+
+    /// Google Calendar can put a plain-text Meet placeholder in location and the join link in
+    /// notes. Match the whole label, not a substring: hybrid meetings may still name a real venue.
+    static func hasPhysicalLocation(_ location: String?) -> Bool {
+        let normalized = (location ?? "").split(whereSeparator: \.isWhitespace)
+            .joined(separator: " ").lowercased()
+        guard !normalized.isEmpty, !normalized.contains("://") else { return false }
+        return normalized != "google meet" && normalized != "google meet (instructions in description)"
     }
 
     private static let joinURLPattern = try! NSRegularExpression(pattern: #"https?://[^\s<>"]+"#)
