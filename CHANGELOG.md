@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- Google Meet location labels, including "Google Meet (instructions in description)", no longer trigger travel-lead alerts or show as in-person meetings. Addresses and room names still qualify for travel alerts, even when the event also has a video-call link.
+
 ## [1.9.1] - 2026-11-04
 
 ### Added
