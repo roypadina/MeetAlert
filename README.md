@@ -257,6 +257,8 @@ exact key format if you ever need to hand-edit it (e.g. to un-ignore something).
 - **Whole calendars** — untick a calendar in Settings → Calendars to stop watching it entirely.
 - **Ignore forever** — the popup/menu ignore button. On a **recurring** meeting it ignores the
   **whole series** (the button says "Ignore series"); on a one-off it ignores that occurrence.
+  Ignoring also closes its open alerts and cancels pending snoozes and escalations, across all
+  occurrences when ignoring a series.
 - **Pre-ignore** — Settings → **Ignore** lists the next 7 days of meetings with per-row Ignore
   buttons (recurring ones offer "This time only" / "Whole series"), plus everything currently
   ignored with one-click un-ignore. Ignored meetings are excluded everywhere — alerts, menu bar,
