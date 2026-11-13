@@ -20,6 +20,7 @@ private final class KeyablePanel: NSPanel {
 @MainActor
 enum AlertPanel {
     private static var active: [(key: String, panel: NSPanel, state: PanelState)] = []
+    private static var waitingForScreen: Set<String> = []  // alertKeys whose show() retries until a display returns
     private static let width: CGFloat = 640
     private static let height: CGFloat = 168
     private static let gap: CGFloat = 10
@@ -38,8 +39,11 @@ enum AlertPanel {
         // is already marked fired, so dropping the panel here would lose the alert for good. Retry
         // instead of un-marking anything; it self-heals once a display shows up.
         guard let screen = screenUnderMouse() else {
+            waitingForScreen.insert(alertKey)
             Task { @MainActor in
                 try? await Task.sleep(for: .seconds(30))
+                // Stopped meanwhile (ACK, snooze, a newer offset of this meeting): no stale popup.
+                guard waitingForScreen.remove(alertKey) != nil else { return }
                 show(m, alertKey: alertKey, onAck: onAck, onSnooze: onSnooze, onSnoozeStart: onSnoozeStart, onIgnore: onIgnore)
             }
             return
@@ -87,6 +91,7 @@ enum AlertPanel {
     /// Closes the panel for `key` if one is open — e.g. an ACK or snooze that arrived via the phone
     /// push, which previously stopped escalation but left the desktop panel sitting there forever.
     static func dismiss(key: String) {
+        waitingForScreen.remove(key)
         guard let idx = active.firstIndex(where: { $0.key == key }) else { return }
         remove(at: idx)
     }

@@ -206,4 +206,29 @@ final class AlertCleanupTests: XCTestCase {
         }
     }
 
+    func testOffsetDueWhenASnoozeEndsOpensOnlyTheNewPopup() throws {
+        let m = meeting("meeting")
+        let earlier = "\(m.key)@3", current = "\(m.key)@0"
+        var state = Store.Persisted()
+        state.alertedKeys = [earlier]
+        state.snoozedUntil = [earlier: m.start]  // Snooze 5m on the 3-min alert is capped to the start
+        try withStore(state: state) { store, url in
+            var shown: [String] = []
+            store.presentPanelForTesting = { shown.append($0) }
+            store.processAlerts(m, now: m.start)
+            XCTAssertEqual(shown, [current])  // the snoozed popup never reopens just to be replaced
+            XCTAssertEqual(store.showingAlerts.map(\.key), [current])
+            XCTAssertTrue(try savedState(url).snoozedUntil.isEmpty)
+        }
+    }
+
+    func testOccurrenceTokensCoverEveryOffsetOfThatOccurrenceOnly() throws {
+        let m = meeting("series", series: "series")
+        let next = meeting("series", start: m.start.addingTimeInterval(3600), series: "series")
+        try withStore { store, _ in
+            XCTAssertEqual(store.occurrenceTokens(m), [Store.hashToken("\(m.key)@3"), Store.hashToken("\(m.key)@0")])
+            XCTAssertTrue(store.occurrenceTokens(m).isDisjoint(with: store.occurrenceTokens(next)))
+        }
+    }
+
 }

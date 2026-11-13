@@ -54,6 +54,14 @@ final class NtfyTests: XCTestCase {
         XCTAssertEqual(Ntfy.ackOutcome(in: Data(ack.utf8), tokens: ["current", "abc"]), .acked)
     }
 
+    func testAckFromJustBeforeTheAlertCountsButSnoozeDoesNot() {
+        let ack = #"{"message":"meetack abc","time":100}"#
+        let snooze = #"{"message":"meetsnooze abc","time":100}"#
+        XCTAssertEqual(Ntfy.ackOutcome(in: Data(ack.utf8), tokens: ["abc"], snoozeSince: 130), .acked)
+        XCTAssertNil(Ntfy.ackOutcome(in: Data(snooze.utf8), tokens: ["abc"], snoozeSince: 130))
+        XCTAssertEqual(Ntfy.ackOutcome(in: Data(snooze.utf8), tokens: ["abc"], snoozeSince: 100), .snoozed)
+    }
+
     func testFallbackDecision() {
         let fb = cfg(fallback: "https://ntfy.sh/pub-topic")
         XCTAssertTrue(Ntfy.shouldFallback(status: nil, cfg: fb))
