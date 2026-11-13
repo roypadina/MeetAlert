@@ -252,6 +252,9 @@ final class Store {
         menuBarSymbol = warning ? "exclamationmark.triangle" : symbolFor(visible, now: now)
 
         for m in list {
+            // Fire first: a newer offset due now retires a snooze ending now, instead of the snoozed
+            // panel opening and being replaced in the same tick (Snooze 5m on the 3-min alert ends at start).
+            fireDueOffsets(m, now: now)
             for offset in offsets(for: m) {
                 let alertKey = "\(m.key)@\(offset)"
                 if let due = persisted.snoozedUntil[alertKey], now >= due {
@@ -260,7 +263,6 @@ final class Store {
                     showPanel(m, alertKey: alertKey, token: nil)  // re-show only, no re-arm
                 }
             }
-            fireDueOffsets(m, now: now)
         }
         sendMorningAgenda()
     }
@@ -551,6 +553,9 @@ final class Store {
         let away = isAway()
         showPanel(m, alertKey: alertKey, token: token)
 
+        // This alert retires the occurrence's earlier ones and their listeners, but their phone pushes
+        // keep live ACK/Snooze buttons — so listen for every offset's token of this occurrence.
+        let tokens = Set(offsets(for: m).map { Self.hashToken("\(m.key)@\($0)") })
         let since = Int(Date().timeIntervalSince1970)
         let cfg = config
         let testMode = testMode
@@ -561,7 +566,7 @@ final class Store {
             for attempt in 0..<maxUrgent {
                 let deadline = min(Date().addingTimeInterval(Double(testMode ? 20 : cfg.escalationSeconds)), hardDeadline)
                 guard deadline > Date() else { break }
-                let outcome = await Ntfy.waitForAck(token: token, since: since, deadline: deadline, cfg: cfg)
+                let outcome = await Ntfy.waitForAck(tokens: tokens, since: since, deadline: deadline, cfg: cfg)
                 guard !Task.isCancelled else { return }
                 switch outcome {
                 case .acked:

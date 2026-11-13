@@ -46,10 +46,12 @@ final class NtfyTests: XCTestCase {
         let alert = #"{"message":"Starts in 3 min\#(footer.replacingOccurrences(of: "\n", with: "\\n"))"}"#
         let ack = #"{"message":"meetack abc"}"#
         let snooze = #"{"message":"meetsnooze abc"}"#
-        XCTAssertNil(Ntfy.ackOutcome(in: Data(alert.utf8), token: "abc"))
-        XCTAssertEqual(Ntfy.ackOutcome(in: Data("\(alert)\n\(ack)".utf8), token: "abc"), .acked)
-        XCTAssertEqual(Ntfy.ackOutcome(in: Data("\(alert)\n\(snooze)".utf8), token: "abc"), .snoozed)
-        XCTAssertNil(Ntfy.ackOutcome(in: Data(ack.utf8), token: "other"))
+        XCTAssertNil(Ntfy.ackOutcome(in: Data(alert.utf8), tokens: ["abc"]))
+        XCTAssertEqual(Ntfy.ackOutcome(in: Data("\(alert)\n\(ack)".utf8), tokens: ["abc"]), .acked)
+        XCTAssertEqual(Ntfy.ackOutcome(in: Data("\(alert)\n\(snooze)".utf8), tokens: ["abc"]), .snoozed)
+        XCTAssertNil(Ntfy.ackOutcome(in: Data(ack.utf8), tokens: ["other"]))
+        // An ACK from an earlier offset's push of the same occurrence still counts.
+        XCTAssertEqual(Ntfy.ackOutcome(in: Data(ack.utf8), tokens: ["current", "abc"]), .acked)
     }
 
     func testFallbackDecision() {
