@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - Saved preferences survive normal app launches: loading Keychain credentials no longer overwrites config.json with defaults before reading it.
+- A new reminder for the same meeting occurrence replaces its earlier popup and cancels superseded escalations and snoozes. An expired snooze no longer opens a duplicate beside an already visible reminder. Different meetings still have separate alerts.
 
 ## [1.9.2] - 2026-11-12
 

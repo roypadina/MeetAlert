@@ -590,12 +590,26 @@ final class Store {
 
     /// token == nil means "re-show a snoozed panel" (no ntfy, no escalation).
     private func showPanel(_ m: Meeting, alertKey: String, token: String?) {
-        if !showingAlerts.contains(where: { $0.key == alertKey }) { showingAlerts.append((alertKey, m)) }
+        guard preparePanel(m, alertKey: alertKey, resumingSnooze: token == nil) else { return }
         AlertPanel.show(m, alertKey: alertKey,
             onAck: { [weak self] in self?.ack(alertKey) },
             onSnooze: { [weak self] minutes in self?.snooze(m, alertKey: alertKey, minutes: minutes) },
             onSnoozeStart: { [weak self] in self?.snoozeUntilStart(m, alertKey: alertKey) },
             onIgnore: { [weak self] in self?.ignoreForever(m) })
+    }
+
+    /// Register one visible reminder per occurrence before presenting its window.
+    /// Kept separate from window creation so reminder lifecycle tests need no on-screen panels.
+    func preparePanel(_ m: Meeting, alertKey: String, resumingSnooze: Bool) -> Bool {
+        guard !showingAlerts.contains(where: { $0.key == alertKey }) else { return false }
+        // An expired snooze must not displace a newer reminder or cancel its escalation.
+        if resumingSnooze, showingAlerts.contains(where: { $0.meeting.key == m.key }) { return false }
+        // A new scheduled offset supersedes earlier reminders for this occurrence only.
+        // Retire their escalations and snoozes as well as their visible windows.
+        stopAlerts(for: m.key)
+        showingAlerts.append((alertKey, m))
+        saveState()
+        return true
     }
 
     /// Settings' "Send test push" button.
