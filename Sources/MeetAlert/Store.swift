@@ -549,8 +549,8 @@ final class Store {
         return String(hash, radix: 16)
     }
 
-    /// ntfy ack token is per-alertKey now (see hashToken) — an ACK/snooze only ever matches its own
-    /// escalation loop, never a different offset or a different meeting.
+    /// ntfy ack token is per-alertKey (see hashToken). The escalation loop accepts the tokens of every
+    /// offset of this occurrence (see occurrenceTokens), never a different occurrence or meeting.
     private func fire(_ m: Meeting, alertKey: String) {
         let token = Self.hashToken(alertKey)
         if testMode { emit("fired \(token)") }
