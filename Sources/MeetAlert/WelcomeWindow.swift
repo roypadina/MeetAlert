@@ -6,6 +6,7 @@ import SwiftUI
 @MainActor
 enum WelcomeWindow {
     private static var window: NSWindow?
+    static var isShowing: Bool { window != nil }  // the support prompt never shows over setup
 
     static func show() {
         if window == nil {

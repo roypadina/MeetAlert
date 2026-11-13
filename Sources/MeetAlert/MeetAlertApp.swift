@@ -84,6 +84,14 @@ private struct MenuContent: View {
             }
             Divider()
         }
+        if store.supportPromptShowing {  // the receipt card is mouse-only; same three answers here
+            Section("Support MeetAlert") {
+                Button("Tip a Coffee on Ko-fi ☕") { SupportPanel.respond(.support); SupportPanel.close() }
+                Button("Ask Me in 2 Weeks") { SupportPanel.respond(.snooze); SupportPanel.close() }
+                Button("Don't Ask Again") { SupportPanel.respond(.never); SupportPanel.close() }
+            }
+            Divider()
+        }
         Section("Next Up") {
             if store.upcomingList.isEmpty {
                 Text("No upcoming meetings")
@@ -133,7 +141,14 @@ private struct MenuContent: View {
         Divider()
         Button("About MeetAlert") { AboutWindow.show() }
         Button("Welcome Guide…") { WelcomeWindow.show() }
-        Button("Support on Ko-fi ☕") { NSWorkspace.shared.open(AboutInfo.kofi) }
+        if #available(macOS 15, *) {  // hold ⌥: preview the support card without recording an ask
+            Button("Support on Ko-fi ☕") { NSWorkspace.shared.open(AboutInfo.kofi) }
+                .modifierKeyAlternate(.option) {
+                    Button("Show Support Prompt Now") { store.presentSupportPrompt(record: false) }
+                }
+        } else {
+            Button("Support on Ko-fi ☕") { NSWorkspace.shared.open(AboutInfo.kofi) }
+        }
         Button("Quit MeetAlert") { NSApp.terminate(nil) }.keyboardShortcut("q")
     }
 }
