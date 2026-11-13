@@ -154,6 +154,7 @@ final class Store {
     /// Alerts whose panel is on screen, oldest first — mirrored in the status menu so keyboard-only
     /// users can act on them (the panel itself is mouse-only until clicked).
     var showingAlerts: [(key: String, meeting: Meeting)] = []
+    var presentPanelForTesting: ((String) -> Void)?  // tests record presented alertKeys instead of opening windows
     var lastPushFailed = false  // last ntfy publish attempt (with a topic configured) didn't succeed
 
     private let testMode = ProcessInfo.processInfo.environment["MEETALERT_TEST"] == "1"
@@ -251,18 +252,23 @@ final class Store {
             : menuBarTextFor(visible, now: now)
         menuBarSymbol = warning ? "exclamationmark.triangle" : symbolFor(visible, now: now)
 
-        for m in list {
-            for offset in offsets(for: m) {
-                let alertKey = "\(m.key)@\(offset)"
-                if let due = persisted.snoozedUntil[alertKey], now >= due {
-                    persisted.snoozedUntil.removeValue(forKey: alertKey)
-                    saveState()
-                    showPanel(m, alertKey: alertKey, token: nil)  // re-show only, no re-arm
-                }
-            }
-            fireDueOffsets(m, now: now)
-        }
+        for m in list { processAlerts(m, now: now) }
         sendMorningAgenda()
+    }
+
+    /// One meeting's share of tick(): fire due offsets, then re-show due snoozes.
+    func processAlerts(_ m: Meeting, now: Date) {
+        // Fire first: a newer offset due now retires a snooze ending now, instead of the snoozed
+        // panel opening and being replaced in the same tick (Snooze 5m on the 3-min alert ends at start).
+        fireDueOffsets(m, now: now)
+        for offset in offsets(for: m) {
+            let alertKey = "\(m.key)@\(offset)"
+            if let due = persisted.snoozedUntil[alertKey], now >= due {
+                persisted.snoozedUntil.removeValue(forKey: alertKey)
+                saveState()
+                showPanel(m, alertKey: alertKey, token: nil)  // re-show only, no re-arm
+            }
+        }
     }
 
     /// Once a day, at or after agendaTime, push today's remaining schedule via ntfy (default priority,
@@ -534,7 +540,7 @@ final class Store {
     /// across different meetings that happened to start the same second (cross-meeting ACK/snooze).
     /// Hashing the full alertKey (which already embeds the calendar identifier + start epoch +
     /// offset) makes each alert's token unique to it. FNV-1a, 32-bit.
-    private static func hashToken(_ s: String) -> String {
+    static func hashToken(_ s: String) -> String {
         var hash: UInt32 = 2166136261
         for byte in s.utf8 {
             hash ^= UInt32(byte)
@@ -551,6 +557,7 @@ final class Store {
         let away = isAway()
         showPanel(m, alertKey: alertKey, token: token)
 
+        let tokens = occurrenceTokens(m)
         let since = Int(Date().timeIntervalSince1970)
         let cfg = config
         let testMode = testMode
@@ -561,7 +568,7 @@ final class Store {
             for attempt in 0..<maxUrgent {
                 let deadline = min(Date().addingTimeInterval(Double(testMode ? 20 : cfg.escalationSeconds)), hardDeadline)
                 guard deadline > Date() else { break }
-                let outcome = await Ntfy.waitForAck(token: token, since: since, deadline: deadline, cfg: cfg)
+                let outcome = await Ntfy.waitForAck(tokens: tokens, since: since, deadline: deadline, cfg: cfg)
                 guard !Task.isCancelled else { return }
                 switch outcome {
                 case .acked:
@@ -588,14 +595,35 @@ final class Store {
         }
     }
 
+    /// Every offset's ACK token of this occurrence. A newer alert retires the earlier ones and their
+    /// listeners, but their phone pushes keep live ACK/Snooze buttons, so its listener takes them all.
+    func occurrenceTokens(_ m: Meeting) -> Set<String> {
+        Set(offsets(for: m).map { Self.hashToken("\(m.key)@\($0)") })
+    }
+
     /// token == nil means "re-show a snoozed panel" (no ntfy, no escalation).
     private func showPanel(_ m: Meeting, alertKey: String, token: String?) {
-        if !showingAlerts.contains(where: { $0.key == alertKey }) { showingAlerts.append((alertKey, m)) }
+        guard preparePanel(m, alertKey: alertKey, resumingSnooze: token == nil) else { return }
+        if let presentPanelForTesting { return presentPanelForTesting(alertKey) }
         AlertPanel.show(m, alertKey: alertKey,
             onAck: { [weak self] in self?.ack(alertKey) },
             onSnooze: { [weak self] minutes in self?.snooze(m, alertKey: alertKey, minutes: minutes) },
             onSnoozeStart: { [weak self] in self?.snoozeUntilStart(m, alertKey: alertKey) },
             onIgnore: { [weak self] in self?.ignoreForever(m) })
+    }
+
+    /// Register one visible reminder per occurrence before presenting its window.
+    /// Kept separate from window creation so reminder lifecycle tests need no on-screen panels.
+    func preparePanel(_ m: Meeting, alertKey: String, resumingSnooze: Bool) -> Bool {
+        guard !showingAlerts.contains(where: { $0.key == alertKey }) else { return false }
+        // An expired snooze must not displace a newer reminder or cancel its escalation.
+        if resumingSnooze, showingAlerts.contains(where: { $0.meeting.key == m.key }) { return false }
+        // A new scheduled offset supersedes earlier reminders for this occurrence only.
+        // Retire their escalations and snoozes as well as their visible windows.
+        stopAlerts(for: m.key)
+        showingAlerts.append((alertKey, m))
+        saveState()
+        return true
     }
 
     /// Settings' "Send test push" button.

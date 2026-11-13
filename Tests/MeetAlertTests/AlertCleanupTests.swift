@@ -154,4 +154,81 @@ final class AlertCleanupTests: XCTestCase {
             XCTAssertFalse(saved.alertedKeys.contains("\(m.key)@dismissed"))
         }
     }
+    func testNewOffsetReplacesEarlierPopupAndItsEscalation() throws {
+        let m = meeting("series", series: "series")
+        let next = meeting("series", start: m.start.addingTimeInterval(3600), series: "series")
+        let earlier = "\(m.key)@3", current = "\(m.key)@0", nextKey = "\(next.key)@3"
+        let earlierTask = pendingTask(), nextTask = pendingTask()
+        var state = Store.Persisted()
+        state.snoozedUntil = [earlier: m.start, nextKey: next.start]
+        try withStore(state: state, tasks: [earlier: earlierTask, nextKey: nextTask]) { store, url in
+            store.showingAlerts = [(earlier, m), (nextKey, next)]
+            XCTAssertTrue(store.preparePanel(m, alertKey: current, resumingSnooze: false))
+            XCTAssertEqual(Set(store.showingAlerts.map(\.key)), [current, nextKey])
+            XCTAssertTrue(earlierTask.isCancelled)
+            XCTAssertFalse(nextTask.isCancelled)
+            let saved = try savedState(url)
+            XCTAssertEqual(saved.snoozedUntil, [nextKey: next.start])
+            XCTAssertFalse(saved.alertedKeys.contains("\(m.key)@dismissed"))
+        }
+    }
+
+    func testSnoozeResumingDoesNotReplaceAnAlreadyVisibleReminder() throws {
+        let m = meeting("meeting")
+        let current = "\(m.key)@0", snoozed = "\(m.key)@3"
+        let currentTask = pendingTask()
+        try withStore(tasks: [current: currentTask]) { store, _ in
+            store.showingAlerts = [(current, m)]
+            XCTAssertFalse(store.preparePanel(m, alertKey: snoozed, resumingSnooze: true))
+            XCTAssertEqual(store.showingAlerts.map(\.key), [current])
+            XCTAssertFalse(currentTask.isCancelled)
+        }
+    }
+
+    func testRepeatedPresentationDoesNotDuplicateOrCancelCurrentReminder() throws {
+        let m = meeting("meeting")
+        let key = "\(m.key)@0"
+        let task = pendingTask()
+        try withStore(tasks: [key: task]) { store, _ in
+            store.showingAlerts = [(key, m)]
+            XCTAssertFalse(store.preparePanel(m, alertKey: key, resumingSnooze: false))
+            XCTAssertEqual(store.showingAlerts.map(\.key), [key])
+            XCTAssertFalse(task.isCancelled)
+        }
+    }
+
+    func testDifferentMeetingsWithSameTitleStillGetSeparatePopups() throws {
+        let a = meeting("a"), b = meeting("b")
+        try withStore { store, _ in
+            XCTAssertTrue(store.preparePanel(a, alertKey: "\(a.key)@3", resumingSnooze: true))
+            XCTAssertTrue(store.preparePanel(b, alertKey: "\(b.key)@3", resumingSnooze: true))
+            XCTAssertEqual(store.showingAlerts.count, 2)
+        }
+    }
+
+    func testOffsetDueWhenASnoozeEndsOpensOnlyTheNewPopup() throws {
+        let m = meeting("meeting")
+        let earlier = "\(m.key)@3", current = "\(m.key)@0"
+        var state = Store.Persisted()
+        state.alertedKeys = [earlier]
+        state.snoozedUntil = [earlier: m.start]  // Snooze 5m on the 3-min alert is capped to the start
+        try withStore(state: state) { store, url in
+            var shown: [String] = []
+            store.presentPanelForTesting = { shown.append($0) }
+            store.processAlerts(m, now: m.start)
+            XCTAssertEqual(shown, [current])  // the snoozed popup never reopens just to be replaced
+            XCTAssertEqual(store.showingAlerts.map(\.key), [current])
+            XCTAssertTrue(try savedState(url).snoozedUntil.isEmpty)
+        }
+    }
+
+    func testOccurrenceTokensCoverEveryOffsetOfThatOccurrenceOnly() throws {
+        let m = meeting("series", series: "series")
+        let next = meeting("series", start: m.start.addingTimeInterval(3600), series: "series")
+        try withStore { store, _ in
+            XCTAssertEqual(store.occurrenceTokens(m), [Store.hashToken("\(m.key)@3"), Store.hashToken("\(m.key)@0")])
+            XCTAssertTrue(store.occurrenceTokens(m).isDisjoint(with: store.occurrenceTokens(next)))
+        }
+    }
+
 }

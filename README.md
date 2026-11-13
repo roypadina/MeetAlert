@@ -197,6 +197,10 @@ all change together, so it survives colour-blindness, Increase Contrast (which d
 translucency for an opaque background and a heavier border) and Reduce Motion (which keeps the
 fades and drops the movement).
 
+Each meeting occurrence has at most one visible popup. A newer scheduled reminder replaces its
+earlier reminder and retires the older escalation and snooze. Different meetings can still appear
+at the same time.
+
 The row of actions is **Join <provider>** (the one filled button, `↩`), **Snooze 5m**,
 **Dismiss** (`⌘D`), **Ignore**/**Ignore series** (`⌘⇧I`), and **More ▾** holding the two
 remaining snoozes. With no meeting link, Dismiss becomes the filled button — there's always

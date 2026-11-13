@@ -65,32 +65,36 @@ enum Ntfy {
 
     enum AckOutcome { case acked, snoozed, timedOut }
 
-    static func waitForAck(token: String, since: Int, deadline: Date, cfg: Store.Config) async -> AckOutcome {
+    /// Polls 30 s before `since`: an ACK sent to an earlier offset just before this alert replaced it
+    /// (its listener was cancelled mid-sleep) still counts. A snooze from that window was meant for the
+    /// earlier offset, so only snoozes at or after `since` count.
+    static func waitForAck(tokens: Set<String>, since: Int, deadline: Date, cfg: Store.Config) async -> AckOutcome {
         guard !cfg.ntfyTopic.isEmpty,
-              let url = URL(string: "\(cfg.ntfyServer)/\(cfg.ntfyTopic)/json?poll=1&since=\(since)") else { return .timedOut }
+              let url = URL(string: "\(cfg.ntfyServer)/\(cfg.ntfyTopic)/json?poll=1&since=\(since - 30)") else { return .timedOut }
         var request = URLRequest(url: url)
         request.cachePolicy = .reloadIgnoringLocalCacheData
         for (k, v) in authHeaders(for: url, cfg: cfg) { request.setValue(v, forHTTPHeaderField: k) }
         while Date() < deadline {
             if Task.isCancelled { return .timedOut }
             if let (data, _) = try? await URLSession.shared.data(for: request),
-               let outcome = ackOutcome(in: data, token: token) { return outcome }
+               let outcome = ackOutcome(in: data, tokens: tokens, snoozeSince: since) { return outcome }
             try? await Task.sleep(for: .seconds(10))
         }
         return .timedOut
     }
 
     /// Exact-match on the reply body, so the footer on our own outbound alerts can never look like an ACK.
-    static func ackOutcome(in data: Data, token: String) -> AckOutcome? {
+    static func ackOutcome(in data: Data, tokens: Set<String>, snoozeSince: Int = 0) -> AckOutcome? {
         for line in String(decoding: data, as: UTF8.self).split(separator: "\n") {
             guard let msg = try? JSONDecoder().decode(NtfyMessage.self, from: Data(line.utf8)) else { continue }
-            if msg.message == "meetack \(token)" { return .acked }
-            if msg.message == "meetsnooze \(token)" { return .snoozed }
+            if tokens.contains(where: { msg.message == "meetack \($0)" }) { return .acked }
+            if tokens.contains(where: { msg.message == "meetsnooze \($0)" }),
+               (msg.time ?? snoozeSince) >= snoozeSince { return .snoozed }
         }
         return nil
     }
 
-    struct NtfyMessage: Decodable { let message: String?; var id: String? = nil }
+    struct NtfyMessage: Decodable { let message: String?; var id: String? = nil; var time: Int? = nil }
 
     // JSON publish API request/action shapes — see https://docs.ntfy.sh/publish/#publish-as-json
     struct Action: Encodable {
