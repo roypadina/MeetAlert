@@ -732,12 +732,21 @@ final class Store {
             saveConfig()
         }
         if !testMode {  // test mode never touches the real Keychain
-            config.ntfyToken = Keychain.get(Keychain.tokenService)
-            config.ntfyFallbackURL = Keychain.get(Keychain.fallbackService)
+            loadConfig(token: Keychain.get(Keychain.tokenService), fallbackURL: Keychain.get(Keychain.fallbackService))
             secretsLoaded = true  // before this, saveConfig must not overwrite the Keychain with empty defaults
+        } else {
+            loadConfig()
         }
-        loadConfig()
         loadState()
+    }
+
+    /// Restore disk preferences together with already-read credentials. Tests supply synthetic secrets.
+    func loadConfig(token: String, fallbackURL: String) {
+        // Mutating config invokes saveConfig. Read preferences before either credential write,
+        // otherwise the default config replaces the user's file during every normal launch.
+        loadConfig()
+        config.ntfyToken = token
+        config.ntfyFallbackURL = fallbackURL
     }
 
     private func loadConfig() {
