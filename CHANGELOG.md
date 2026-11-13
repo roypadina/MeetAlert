@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- Saved preferences survive normal app launches: loading Keychain credentials no longer overwrites config.json with defaults before reading it.
+
 ## [1.9.2] - 2026-11-12
 
 ### Fixed
