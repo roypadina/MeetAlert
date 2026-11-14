@@ -120,6 +120,9 @@ final class Store {
         var alertedKeys: Set<String> = []  // "identifier|epoch@offset" — epoch used to prune >24h old
         var snoozedUntil: [String: Date] = [:]  // keyed by alertKey; survives a restart
         var lastAgendaDay: String = ""  // "yyyy-MM-dd" of the last morning-agenda push
+        var installDate: Date?  // first launch with the support prompt; gates its first ask
+        var meetingsCaught = 0  // lifetime meeting occurrences MeetAlert alerted for (the prompt's {n})
+        var supportPrompt = SupportPromptState()
 
         init() {}
 
@@ -135,6 +138,9 @@ final class Store {
             alertedKeys = try c.decodeIfPresent(Set<String>.self, forKey: .alertedKeys) ?? []
             snoozedUntil = try c.decodeIfPresent([String: Date].self, forKey: .snoozedUntil) ?? [:]
             lastAgendaDay = try c.decodeIfPresent(String.self, forKey: .lastAgendaDay) ?? ""
+            installDate = try c.decodeIfPresent(Date.self, forKey: .installDate)
+            meetingsCaught = try c.decodeIfPresent(Int.self, forKey: .meetingsCaught) ?? 0
+            supportPrompt = try c.decodeIfPresent(SupportPromptState.self, forKey: .supportPrompt) ?? SupportPromptState()
         }
     }
 
@@ -156,6 +162,7 @@ final class Store {
     var showingAlerts: [(key: String, meeting: Meeting)] = []
     var presentPanelForTesting: ((String) -> Void)?  // tests record presented alertKeys instead of opening windows
     var lastPushFailed = false  // last ntfy publish attempt (with a topic configured) didn't succeed
+    var supportPromptShowing = false  // mirrored in the status menu: the card never takes keyboard focus
 
     private let testMode = ProcessInfo.processInfo.environment["MEETALERT_TEST"] == "1"
     @ObservationIgnored private lazy var ekStore = EKEventStore()  // never touched in test mode
@@ -168,6 +175,8 @@ final class Store {
     private var accessResolved = false  // true once requestFullAccessToEvents has completed (either way)
     private var agendaSending = false  // in-flight guard: a publish slower than one 30s tick must not double-send
     private var activityToken: NSObjectProtocol?  // held for the app's lifetime so App Nap doesn't stall the timer
+    // shortcut: in memory only — a quit between a meeting's end and the ask skips that one chance; persist if it matters.
+    private var supportPromptAfter: Date?  // an alerted meeting's end + 2 min: the next chance to ask for support
 
     private let storageDirectory: URL
 
@@ -254,6 +263,43 @@ final class Store {
 
         for m in list { processAlerts(m, now: now) }
         sendMorningAgenda()
+        maybeShowSupportPrompt(visible, now: now)
+    }
+
+    static var appVersion: String { Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0" }
+
+    /// The Ko-fi ask: 2 min after a meeting MeetAlert alerted for has ended, if SupportPromptState allows it.
+    /// `visible` = meetings in progress or ahead (tick's list).
+    private func maybeShowSupportPrompt(_ visible: [Meeting], now: Date) {
+        guard let after = supportPromptAfter, now >= after else { return }
+        // Not now: an alert on screen, setup, or nobody at the desk — keep the chance and retry next tick.
+        guard showingAlerts.isEmpty, !WelcomeWindow.isShowing, !supportPromptShowing, !isAway() else { return }
+        supportPromptAfter = nil  // one try per meeting end
+        // In a meeting, or one starts within 15 min: skip; the next alerted meeting's end tries again.
+        guard !visible.contains(where: { $0.start <= now.addingTimeInterval(15 * 60) }),
+              let installDate = persisted.installDate,
+              persisted.supportPrompt.mayAsk(now: now, installDate: installDate,
+                                              meetingsCaught: persisted.meetingsCaught, appVersion: Self.appVersion)
+        else { return }
+        persisted.supportPrompt.recordShown(now)
+        saveState()
+        presentSupportPrompt()
+    }
+
+    /// `record: false` = the ⌥ menu preview: shows the real card but never touches the ask bookkeeping.
+    func presentSupportPrompt(record: Bool = true) {
+        guard !supportPromptShowing else { return }
+        supportPromptShowing = true
+        SupportPanel.show(meetingsCaught: persisted.meetingsCaught,
+                          onAnswer: { [weak self] answer in self?.answerSupportPrompt(answer, record: record) },
+                          onClosed: { [weak self] in self?.supportPromptShowing = false })
+    }
+
+    private func answerSupportPrompt(_ answer: SupportPromptState.Answer, record: Bool) {
+        if answer == .support { NSWorkspace.shared.open(AboutInfo.kofi) }
+        guard record else { return }
+        persisted.supportPrompt.record(answer, now: Date(), appVersion: Self.appVersion)
+        saveState()
     }
 
     /// One meeting's share of tick(): fire due offsets, then re-show due snoozes.
@@ -360,6 +406,10 @@ final class Store {
             return (key, alertTime)
         }
         guard let winner = due.max(by: { $0.alertTime < $1.alertTime }) else { return }
+        if !persisted.alertedKeys.contains(where: { $0.hasPrefix("\(m.key)@") }) {  // first alert of this occurrence
+            persisted.meetingsCaught += 1
+            supportPromptAfter = max(supportPromptAfter ?? .distantPast, m.end.addingTimeInterval(2 * 60))
+        }
         persisted.alertedKeys.formUnion(due.map(\.key))
         saveState()
         fire(m, alertKey: winner.key)
@@ -552,6 +602,8 @@ final class Store {
     /// ntfy ack token is per-alertKey (see hashToken). The escalation loop accepts the tokens of every
     /// offset of this occurrence (see occurrenceTokens), never a different occurrence or meeting.
     private func fire(_ m: Meeting, alertKey: String) {
+        // A support card still unanswered when the next alert fires counts as "Ask me in 2 weeks".
+        if supportPromptShowing { SupportPanel.respond(.snooze); SupportPanel.close() }
         let token = Self.hashToken(alertKey)
         if testMode { emit("fired \(token)") }
         let away = isAway()
@@ -766,6 +818,10 @@ final class Store {
             loadConfig()
         }
         loadState()
+        if persisted.installDate == nil {
+            persisted.installDate = Date()
+            saveState()
+        }
     }
 
     /// Restore disk preferences together with already-read credentials. Tests supply synthetic secrets.

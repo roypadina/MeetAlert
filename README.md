@@ -351,6 +351,8 @@ Free, open-source Mac menu-bar apps and terminal tools, all on one site: **[apps
 
 If MeetAlert saves you from walking into a meeting 10 minutes late, you can support its development — it's optional and always appreciated.
 
+Once in a while, MeetAlert asks too. A small receipt card shows up two minutes after a meeting ends. It only appears after the app has caught more than 32 meetings for you, and at most 3 times a year. "Ask me in 2 weeks" snoozes it, and "Nope, don't ask again" keeps it away until the next major version. If the next meeting alert fires while the card is still open, it closes and counts as a snooze. It never shows during a meeting and never takes keyboard focus.
+
 [![Support me on Ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/roypadina)
 
 A ⭐ on the repo helps just as much.

@@ -37,6 +37,12 @@ enum Theme {
                              dark: NSColor(red: 1.00, green: 0.35, blue: 0.31, alpha: 1),   // #FF5A4E  5.5:1 on ink
                              hcLight: NSColor(red: 0.62, green: 0.08, blue: 0.06, alpha: 1), // #9E1410
                              hcDark: NSColor(red: 1.00, green: 0.54, blue: 0.50, alpha: 1))  // #FF8A80
+    /// Ko-fi red for the support prompt. Same rule as the signal hues: white on #FF5E5B is only
+    /// 3.0:1, so dark mode keeps the brand red with ink text (6.3:1), light mode deepens it for white (5.4:1).
+    static let kofi = dyn(light: NSColor(red: 0.78, green: 0.19, blue: 0.18, alpha: 1),   // #C8302D
+                          dark: NSColor(red: 1.00, green: 0.37, blue: 0.36, alpha: 1),    // #FF5E5B
+                          hcLight: NSColor(red: 0.64, green: 0.14, blue: 0.13, alpha: 1), // #A32320
+                          hcDark: NSColor(red: 1.00, green: 0.53, blue: 0.51, alpha: 1))  // #FF8783
     /// Ink text on the bright dark-mode fills (≥6.5:1), white on the deep light-mode fills (≥4.9:1).
     static let onSignal = dyn(light: .white, dark: NSColor(red: 0.05, green: 0.07, blue: 0.13, alpha: 1))
 
