@@ -34,9 +34,15 @@ final class Store {
         var id: String { key }
     }
 
+    enum AutoDismiss: String, Codable, CaseIterable {
+        case meetingEnd, afterStart, never
+    }
+
     struct Config: Codable, Equatable {
         var alertMinutesBefore: [Int] = [3, 0]  // positive = before start, 0 = at start, negative = after start
         var lateAlertMinutes = 10  // fire a missed alert up to this long past its scheduled time (covers Google→macOS sync lag)
+        var autoDismiss: AutoDismiss = .meetingEnd
+        var autoDismissMinutes = 15  // after the meeting starts, not after each popup or snooze
         var escalationSeconds = 120
         var escalationRepeats = 3  // urgent re-pushes before giving up; raise it if the phone's insistent ring is off
         var awayIdleSeconds = 120  // idle (or screen-locked) this long → treat as away from the Mac
@@ -53,7 +59,7 @@ final class Store {
         var ntfyFallbackURL = ""  // optional full topic URL published to (unauthenticated, no actions) when the primary fails
 
         private enum CodingKeys: String, CodingKey {
-            case alertMinutesBefore, lateAlertMinutes, escalationSeconds, escalationRepeats, awayIdleSeconds, travelLeadMinutes,
+            case alertMinutesBefore, lateAlertMinutes, autoDismiss, autoDismissMinutes, escalationSeconds, escalationRepeats, awayIdleSeconds, travelLeadMinutes,
                  agendaTime, ignoreAllDay, ignoreKeywords, ntfyServer, ntfyTopic, calendarIds, calendarColors
             case leadMinutes, agendaHour  // legacy keys, migrated in init(from:) below
         }
@@ -73,6 +79,8 @@ final class Store {
                 alertMinutesBefore = [3, 0]
             }
             lateAlertMinutes = try c.decodeIfPresent(Int.self, forKey: .lateAlertMinutes) ?? 10
+            autoDismiss = (try c.decodeIfPresent(String.self, forKey: .autoDismiss)).flatMap(AutoDismiss.init(rawValue:)) ?? .meetingEnd
+            autoDismissMinutes = Self.normalizedAutoDismissMinutes(try c.decodeIfPresent(Int.self, forKey: .autoDismissMinutes) ?? 15)
             escalationSeconds = try c.decodeIfPresent(Int.self, forKey: .escalationSeconds) ?? 120
             escalationRepeats = max(1, try c.decodeIfPresent(Int.self, forKey: .escalationRepeats) ?? 3)
             awayIdleSeconds = try c.decodeIfPresent(Int.self, forKey: .awayIdleSeconds) ?? 120
@@ -87,6 +95,16 @@ final class Store {
             calendarColors = try c.decodeIfPresent([String: String].self, forKey: .calendarColors) ?? [:]
         }
 
+        static func normalizedAutoDismissMinutes(_ minutes: Int) -> Int { min(1440, max(1, minutes)) }
+
+        func autoDismissDate(for meeting: Meeting) -> Date? {
+            switch autoDismiss {
+            case .meetingEnd: return meeting.end
+            case .afterStart: return meeting.start.addingTimeInterval(Double(Self.normalizedAutoDismissMinutes(autoDismissMinutes)) * 60)
+            case .never: return nil
+            }
+        }
+
         // Not private: SettingsView commits the alert-times field through the same normalization.
         static func normalized(_ minutes: [Int]) -> [Int] {
             let deduped = Array(Set(minutes)).sorted(by: >)
@@ -99,6 +117,8 @@ final class Store {
             var c = encoder.container(keyedBy: CodingKeys.self)
             try c.encode(alertMinutesBefore, forKey: .alertMinutesBefore)
             try c.encode(lateAlertMinutes, forKey: .lateAlertMinutes)
+            try c.encode(autoDismiss, forKey: .autoDismiss)
+            try c.encode(Self.normalizedAutoDismissMinutes(autoDismissMinutes), forKey: .autoDismissMinutes)
             try c.encode(escalationSeconds, forKey: .escalationSeconds)
             try c.encode(escalationRepeats, forKey: .escalationRepeats)
             try c.encode(awayIdleSeconds, forKey: .awayIdleSeconds)
@@ -261,6 +281,7 @@ final class Store {
             : menuBarTextFor(visible, now: now)
         menuBarSymbol = warning ? "exclamationmark.triangle" : symbolFor(visible, now: now)
 
+        dismissExpiredAlerts(meetings: list, now: now)
         for m in list { processAlerts(m, now: now) }
         sendMorningAgenda()
         maybeShowSupportPrompt(visible, now: now)
@@ -302,8 +323,38 @@ final class Store {
         saveState()
     }
 
+    /// Visible panels can outlive the calendar query's lookback (or calendar access itself).
+    /// Prefer refreshed event dates when available, so extending a meeting also extends its alert.
+    func dismissExpiredAlerts(meetings: [Meeting], now: Date) {
+        var current: [String: Meeting] = [:]
+        for meeting in meetings { current[meeting.key] = meeting }
+        for index in showingAlerts.indices {
+            if let refreshed = current[showingAlerts[index].meeting.key] {
+                showingAlerts[index].meeting = refreshed
+            }
+        }
+        for alert in showingAlerts { expireAlert(alert.meeting, now: now) }
+    }
+
+    /// Finalize an expired occurrence, including pending snoozes, without touching other meetings.
+    /// The date guard also rejects catch-up alerts and restored snoozes after their deadline.
+    @discardableResult
+    private func expireAlert(_ meeting: Meeting, now: Date) -> Bool {
+        guard let deadline = config.autoDismissDate(for: meeting), now >= deadline else { return false }
+        let prefix = "\(meeting.key)@"
+        let dismissed = "\(prefix)dismissed"
+        let hasPending = showingAlerts.contains { $0.meeting.key == meeting.key }
+            || escalationTasks.keys.contains { $0.hasPrefix(prefix) }
+            || persisted.snoozedUntil.keys.contains { $0.hasPrefix(prefix) }
+        let hasFired = !persisted.alertedKeys.contains(dismissed)
+            && persisted.alertedKeys.contains { $0.hasPrefix(prefix) }
+        if hasPending || hasFired { ack(dismissed) }
+        return true
+    }
+
     /// One meeting's share of tick(): fire due offsets, then re-show due snoozes.
     func processAlerts(_ m: Meeting, now: Date) {
+        guard !expireAlert(m, now: now) else { return }
         // Fire first: a newer offset due now retires a snooze ending now, instead of the snoozed
         // panel opening and being replaced in the same tick (Snooze 5m on the 3-min alert ends at start).
         fireDueOffsets(m, now: now)
@@ -614,7 +665,8 @@ final class Store {
         let cfg = config
         let testMode = testMode
         let maxUrgent = testMode ? 1 : max(1, cfg.escalationRepeats)  // repeating escalation, bounded
-        let hardDeadline = m.start.addingTimeInterval(15 * 60)  // never escalate past this regardless of offset
+        let expiry = cfg.autoDismissDate(for: m) ?? .distantFuture
+        let hardDeadline = min(m.start.addingTimeInterval(15 * 60), expiry)  // never escalate past auto-dismiss either
         escalationTasks[alertKey] = Task {
             defer { Task { @MainActor in self.escalationTasks.removeValue(forKey: alertKey) } }
             for attempt in 0..<maxUrgent {
@@ -630,6 +682,7 @@ final class Store {
                     await MainActor.run { self.snooze(m, alertKey: alertKey, minutes: 5) }
                     return
                 case .timedOut:
+                    guard Date() < expiry else { return }
                     let ok = await Ntfy.urgent(m, token: token, cfg: cfg, test: testMode,
                                                 attempt: attempt + 1, of: maxUrgent)
                     await MainActor.run {

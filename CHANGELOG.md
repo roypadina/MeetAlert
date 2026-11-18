@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- Unanswered meeting alerts now close at the scheduled meeting end instead of lingering indefinitely. Settings → Alerts offers a custom timeout measured from the meeting start, or Never to retain the previous behavior. Expiry also cancels that occurrence's remaining reminders and snoozes, including catch-up after waking.
+
 ## [1.10.2] - 2026-11-15
 
 ### Fixed
