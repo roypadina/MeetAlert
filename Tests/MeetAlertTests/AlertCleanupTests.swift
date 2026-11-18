@@ -377,6 +377,24 @@ final class AlertCleanupTests: XCTestCase {
         }
     }
 
+    func testMissedMeetingSkipsSupportPromptButKeepsLaterMeetingsChance() throws {
+        let m = meeting("missed")
+        let later = meeting("later", start: m.start.addingTimeInterval(3600))
+        try withStore { store, _ in
+            store.presentPanelForTesting = { _ in }
+            store.processAlerts(m, now: m.start)
+            XCTAssertNotNil(store.supportPromptAfter)
+            store.dismissExpiredAlerts(meetings: [m], now: m.end)
+            XCTAssertNil(store.supportPromptAfter)
+            // Answered-then-later meeting already pushed the chance past this one: keep it.
+            store.processAlerts(m, now: m.start)  // dismissed occurrence: no refire
+            store.processAlerts(later, now: later.start)
+            store.showingAlerts.append(("\(m.key)@0", m))
+            store.dismissExpiredAlerts(meetings: [m, later], now: m.end.addingTimeInterval(60))
+            XCTAssertEqual(store.supportPromptAfter, later.end.addingTimeInterval(120))
+        }
+    }
+
     func testChangingTimeoutAppliesToAlreadyOpenAlert() throws {
         let m = meeting("changed")
         try withStore { store, _ in

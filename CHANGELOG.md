@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - Unanswered alerts now close at the scheduled meeting end by default instead of staying on screen indefinitely. Choose Never in Settings → Alerts → Auto-dismiss to keep the old behavior.
+- The support card no longer appears right after a meeting whose alert closed unanswered.
 
 ## [1.10.2] - 2026-11-15
 

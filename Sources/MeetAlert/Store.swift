@@ -201,7 +201,7 @@ final class Store {
     private var agendaSending = false  // in-flight guard: a publish slower than one 30s tick must not double-send
     private var activityToken: NSObjectProtocol?  // held for the app's lifetime so App Nap doesn't stall the timer
     // shortcut: in memory only — a quit between a meeting's end and the ask skips that one chance; persist if it matters.
-    private var supportPromptAfter: Date?  // an alerted meeting's end + 2 min: the next chance to ask for support
+    private(set) var supportPromptAfter: Date?  // an alerted meeting's end + 2 min: the next chance to ask for support
 
     private let storageDirectory: URL
 
@@ -353,6 +353,9 @@ final class Store {
             || persisted.snoozedUntil.keys.contains { $0.hasPrefix(prefix) }
         let hasFired = !persisted.alertedKeys.contains(dismissed)
             && persisted.alertedKeys.contains { $0.hasPrefix(prefix) }
+        // Missed meeting (closed unanswered): no Ko-fi card right after it; a later meeting's chance stays.
+        if showingAlerts.contains(where: { $0.meeting.key == meeting.key }),
+           let after = supportPromptAfter, after <= meeting.end.addingTimeInterval(2 * 60) { supportPromptAfter = nil }
         if hasPending || hasFired { ack(dismissed) }
         return true
     }
