@@ -227,7 +227,8 @@ Unanswered alerts auto-dismiss at the scheduled meeting end by default. In **Set
 Auto-dismiss**, choose a custom number of minutes after the meeting starts, or **Never** to keep
 alerts open until you act. Auto-dismiss also cancels remaining reminders and snoozes for that
 occurrence. It runs on the next calendar check (normally every 30 seconds, and on wake); settings
-changes apply to alerts already open. A refreshed meeting end is used when available.
+changes apply to alerts already open. A refreshed meeting end is used when available. An alert is
+never closed before 5 minutes after the last alert time, so zero-length events and late alerts still show.
 
 ## Configuration
 
@@ -240,7 +241,7 @@ raw file editing.
 |---|---|---|
 | `alertMinutesBefore` | `[3, 0]` | Minutes before start to fire an alert — one entry per alert. `0` = at start, negative = that many minutes *after* start (a late alert). Deduplicated and sorted (descending) on load. |
 | `autoDismiss` | `"meetingEnd"` | Close unanswered alerts at the scheduled end. `"afterStart"` uses the custom timeout below; `"never"` keeps alerts open until you act. Expiry cancels remaining reminders and snoozes for that occurrence, but does not clear already-delivered phone notifications. |
-| `autoDismissMinutes` | `15` | For `"afterStart"`, minutes after the meeting starts (1–1440). Snoozing and later alert offsets do not restart this timeout. |
+| `autoDismissMinutes` | `15` | For `"afterStart"`, minutes after the meeting starts (1–1440). Snoozing and later alert offsets do not restart this timeout. Never earlier than 5 minutes after the last alert time. |
 | `lateAlertMinutes` | `10` | Still fire a missed alert up to this many minutes *after* its scheduled time (sync-lag cushion). |
 | `escalationSeconds` | `120` | Seconds between each escalation re-push (never past 15 minutes after the meeting's start). |
 | `escalationRepeats` | `3` | How many urgent re-pushes before MeetAlert gives up. Raise it (with a shorter `escalationSeconds`) to replace ntfy's insistent ring with repetition MeetAlert controls — an ACK stops these, insistent can't be stopped. |

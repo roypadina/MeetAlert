@@ -98,11 +98,16 @@ final class Store {
         static func normalizedAutoDismissMinutes(_ minutes: Int) -> Int { min(1440, max(1, minutes)) }
 
         func autoDismissDate(for meeting: Meeting) -> Date? {
+            let requested: Date
             switch autoDismiss {
-            case .meetingEnd: return meeting.end
-            case .afterStart: return meeting.start.addingTimeInterval(Double(Self.normalizedAutoDismissMinutes(autoDismissMinutes)) * 60)
+            case .meetingEnd: requested = meeting.end
+            case .afterStart: requested = meeting.start.addingTimeInterval(Double(Self.normalizedAutoDismissMinutes(autoDismissMinutes)) * 60)
             case .never: return nil
             }
+            // Never before the latest offset has fired and shown for 5 minutes: a zero-length event
+            // (end == start) or a late offset past the deadline would otherwise never alert at all.
+            let latestAlert = meeting.start.addingTimeInterval(-Double((alertMinutesBefore.min() ?? 0) * 60))
+            return max(requested, latestAlert.addingTimeInterval(5 * 60))
         }
 
         // Not private: SettingsView commits the alert-times field through the same normalization.

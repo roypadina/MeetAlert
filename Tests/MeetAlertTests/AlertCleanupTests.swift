@@ -343,6 +343,40 @@ final class AlertCleanupTests: XCTestCase {
         }
     }
 
+    func testZeroLengthEventStillFiresAtStartAlert() throws {
+        let start = Date().addingTimeInterval(600)
+        let m = Store.Meeting(key: "zero|\(Int(start.timeIntervalSince1970))", title: "Synthetic meeting",
+                              start: start, end: start, hasPhysicalLocation: false,
+                              joinURL: nil, seriesId: nil, calendarTitle: "Test", calendarColor: nil)
+        try withStore { store, _ in
+            var shown: [String] = []
+            store.presentPanelForTesting = { shown.append($0) }
+            store.processAlerts(m, now: m.start)
+            XCTAssertEqual(shown, ["\(m.key)@0"])
+            store.dismissExpiredAlerts(meetings: [m], now: m.start.addingTimeInterval(299))
+            XCTAssertEqual(store.showingAlerts.count, 1)
+            store.dismissExpiredAlerts(meetings: [m], now: m.start.addingTimeInterval(300))
+            XCTAssertTrue(store.showingAlerts.isEmpty)
+        }
+    }
+
+    func testLateOffsetPastTimeoutStillFires() throws {
+        let m = meeting("late-nag")
+        try withStore { store, _ in
+            store.config.alertMinutesBefore = [0, -10]
+            store.config.autoDismiss = .afterStart
+            store.config.autoDismissMinutes = 1
+            var shown: [String] = []
+            store.presentPanelForTesting = { shown.append($0) }
+            store.processAlerts(m, now: m.start.addingTimeInterval(600))
+            XCTAssertEqual(shown, ["\(m.key)@-10"])
+            store.dismissExpiredAlerts(meetings: [m], now: m.start.addingTimeInterval(899))
+            XCTAssertEqual(store.showingAlerts.count, 1)
+            store.dismissExpiredAlerts(meetings: [m], now: m.start.addingTimeInterval(900))
+            XCTAssertTrue(store.showingAlerts.isEmpty)
+        }
+    }
+
     func testChangingTimeoutAppliesToAlreadyOpenAlert() throws {
         let m = meeting("changed")
         try withStore { store, _ in
