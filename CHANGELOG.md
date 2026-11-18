@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Auto-dismiss setting (Settings → Alerts): close unanswered alerts at the meeting end, a custom number of minutes after the meeting starts, or Never. Expiry also cancels that occurrence's remaining reminders and snoozes, including catch-up after waking. An alert always stays up at least 5 minutes after the last alert time, so zero-length events and late alerts still show. Thanks @drewksparks (#23).
+
+### Changed
+- Unanswered alerts now close at the scheduled meeting end by default instead of staying on screen indefinitely. Choose Never in Settings → Alerts → Auto-dismiss to keep the old behavior.
+
 ## [1.10.2] - 2026-11-15
 
 ### Fixed

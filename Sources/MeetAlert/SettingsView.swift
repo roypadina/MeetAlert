@@ -32,6 +32,21 @@ struct AlertsTab: View {
                 }
             }
             Section {
+                Picker("Close unanswered alerts", selection: $store.config.autoDismiss) {
+                    Text("At meeting end").tag(Store.AutoDismiss.meetingEnd)
+                    Text("After meeting starts").tag(Store.AutoDismiss.afterStart)
+                    Text("Never").tag(Store.AutoDismiss.never)
+                }
+                if store.config.autoDismiss == .afterStart {
+                    stepperRow("Minutes after start", "Snoozing doesn't restart this timeout.",
+                               value: $store.config.autoDismissMinutes, in: 1...1440, step: 5, unit: " min")
+                }
+            } header: {
+                Text("Auto-dismiss")
+            } footer: {
+                Text("Closes unanswered alerts and cancels their remaining reminders, but not before the last alert has shown for 5 minutes. Never keeps them open until you act. Changes apply to open alerts on the next check.").formFooter()
+            }
+            Section {
                 stepperRow("Catch up late alerts", "Still fire a missed alert this long after its time (calendar sync lag).",
                            value: $store.config.lateAlertMinutes, in: 2...30, unit: " min")
                 stepperRow("Escalate after", "No acknowledgement in time → urgent re-push to the phone.",

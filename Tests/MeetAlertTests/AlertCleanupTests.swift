@@ -231,4 +231,163 @@ final class AlertCleanupTests: XCTestCase {
         }
     }
 
+    func testAutoDismissAtEndCancelsAllOffsetsAndPreservesOtherMeetings() throws {
+        let m = meeting("series", series: "series")
+        let next = meeting("series", start: m.start.addingTimeInterval(3600), series: "series")
+        let key = "\(m.key)@3", nextKey = "\(next.key)@3"
+        let task = pendingTask(), nextTask = pendingTask()
+        var state = Store.Persisted()
+        state.alertedKeys = [key]
+        state.snoozedUntil = ["\(m.key)@0": m.end.addingTimeInterval(60), nextKey: next.start]
+        try withStore(state: state, tasks: [key: task, nextKey: nextTask]) { store, url in
+            store.showingAlerts = [(key, m), (nextKey, next)]
+            store.dismissExpiredAlerts(meetings: [m, next], now: m.end.addingTimeInterval(-1))
+            XCTAssertEqual(store.showingAlerts.count, 2)
+            XCTAssertFalse(task.isCancelled)
+            store.dismissExpiredAlerts(meetings: [m, next], now: m.end)
+            XCTAssertEqual(store.showingAlerts.map(\.key), [nextKey])
+            XCTAssertTrue(task.isCancelled)
+            XCTAssertFalse(nextTask.isCancelled)
+            let saved = try savedState(url)
+            XCTAssertEqual(saved.snoozedUntil, [nextKey: next.start])
+            XCTAssertTrue(saved.alertedKeys.contains("\(m.key)@dismissed"))
+            XCTAssertFalse(saved.alertedKeys.contains("\(next.key)@dismissed"))
+        }
+    }
+
+    func testWakeCleanupClosesTasklessAlertOutsideCalendarQuery() throws {
+        let m = meeting("old", start: Date().addingTimeInterval(-4 * 3600))
+        try withStore { store, _ in
+            store.showingAlerts = [("\(m.key)@0", m)]
+            // tick() must sweep visible windows even when upcoming() no longer returns the event.
+            store.tick()
+            XCTAssertTrue(store.showingAlerts.isEmpty)
+        }
+    }
+
+    func testRefreshedMeetingEndExtendsVisibleAlert() throws {
+        let m = meeting("extended")
+        let extended = Store.Meeting(key: m.key, title: m.title, start: m.start,
+                                    end: m.end.addingTimeInterval(3600), hasPhysicalLocation: false,
+                                    joinURL: nil, seriesId: nil, calendarTitle: "Test", calendarColor: nil)
+        try withStore { store, _ in
+            store.showingAlerts = [("\(m.key)@0", m)]
+            store.dismissExpiredAlerts(meetings: [extended], now: m.end)
+            XCTAssertEqual(store.showingAlerts.count, 1)
+            store.dismissExpiredAlerts(meetings: [], now: m.end.addingTimeInterval(60))
+            XCTAssertEqual(store.showingAlerts.count, 1)  // retain refreshed dates if access disappears
+            store.dismissExpiredAlerts(meetings: [], now: extended.end)
+            XCTAssertTrue(store.showingAlerts.isEmpty)
+        }
+    }
+
+    func testCustomTimeoutUsesMeetingStartAndDoesNotRestartForLaterOffset() throws {
+        let m = meeting("custom")
+        try withStore { store, _ in
+            store.config.autoDismiss = .afterStart
+            store.config.autoDismissMinutes = 5
+            let key = "\(m.key)@-4"
+            store.showingAlerts = [(key, m)]
+            store.dismissExpiredAlerts(meetings: [], now: m.start.addingTimeInterval(299))
+            XCTAssertEqual(store.showingAlerts.map(\.key), [key])
+            store.dismissExpiredAlerts(meetings: [], now: m.start.addingTimeInterval(300))
+            XCTAssertTrue(store.showingAlerts.isEmpty)
+        }
+    }
+
+    func testExpiredRestoredSnoozeNeverPresentsOrRearms() throws {
+        let m = meeting("snoozed")
+        let key = "\(m.key)@3"
+        var state = Store.Persisted()
+        state.alertedKeys = [key]
+        state.snoozedUntil = [key: m.start.addingTimeInterval(301)]
+        try withStore(state: state) { store, url in
+            store.config.autoDismiss = .afterStart
+            store.config.autoDismissMinutes = 5
+            store.presentPanelForTesting = { _ in XCTFail("An expired snooze must not reopen") }
+            store.processAlerts(m, now: m.start.addingTimeInterval(301))
+            XCTAssertTrue(store.showingAlerts.isEmpty)
+            let saved = try savedState(url)
+            XCTAssertTrue(saved.snoozedUntil.isEmpty)
+            XCTAssertTrue(saved.alertedKeys.contains("\(m.key)@dismissed"))
+            XCTAssertEqual(saved.meetingsCaught, 0)
+        }
+    }
+
+    func testCatchUpDoesNotFireAfterAutoDismissDeadline() throws {
+        let m = meeting("catch-up")
+        try withStore { store, _ in
+            store.config.autoDismiss = .afterStart
+            store.config.autoDismissMinutes = 5
+            store.config.lateAlertMinutes = 30
+            store.presentPanelForTesting = { _ in XCTFail("Catch-up must respect auto-dismiss") }
+            store.processAlerts(m, now: m.start.addingTimeInterval(300))
+            XCTAssertTrue(store.showingAlerts.isEmpty)
+        }
+    }
+
+    func testNeverKeepsOldAlertAndAllowsSnoozes() throws {
+        let m = meeting("never")
+        let key = "\(m.key)@0"
+        var state = Store.Persisted()
+        state.alertedKeys = [key]
+        state.snoozedUntil = [key: m.end.addingTimeInterval(60)]
+        try withStore(state: state) { store, _ in
+            store.config.autoDismiss = .never
+            var shown: [String] = []
+            store.presentPanelForTesting = { shown.append($0) }
+            store.processAlerts(m, now: m.end.addingTimeInterval(60))
+            XCTAssertEqual(shown, [key])
+            store.dismissExpiredAlerts(meetings: [], now: m.end.addingTimeInterval(3600))
+            XCTAssertEqual(store.showingAlerts.map(\.key), [key])
+        }
+    }
+
+    func testZeroLengthEventStillFiresAtStartAlert() throws {
+        let start = Date().addingTimeInterval(600)
+        let m = Store.Meeting(key: "zero|\(Int(start.timeIntervalSince1970))", title: "Synthetic meeting",
+                              start: start, end: start, hasPhysicalLocation: false,
+                              joinURL: nil, seriesId: nil, calendarTitle: "Test", calendarColor: nil)
+        try withStore { store, _ in
+            var shown: [String] = []
+            store.presentPanelForTesting = { shown.append($0) }
+            store.processAlerts(m, now: m.start)
+            XCTAssertEqual(shown, ["\(m.key)@0"])
+            store.dismissExpiredAlerts(meetings: [m], now: m.start.addingTimeInterval(299))
+            XCTAssertEqual(store.showingAlerts.count, 1)
+            store.dismissExpiredAlerts(meetings: [m], now: m.start.addingTimeInterval(300))
+            XCTAssertTrue(store.showingAlerts.isEmpty)
+        }
+    }
+
+    func testLateOffsetPastTimeoutStillFires() throws {
+        let m = meeting("late-nag")
+        try withStore { store, _ in
+            store.config.alertMinutesBefore = [0, -10]
+            store.config.autoDismiss = .afterStart
+            store.config.autoDismissMinutes = 1
+            var shown: [String] = []
+            store.presentPanelForTesting = { shown.append($0) }
+            store.processAlerts(m, now: m.start.addingTimeInterval(600))
+            XCTAssertEqual(shown, ["\(m.key)@-10"])
+            store.dismissExpiredAlerts(meetings: [m], now: m.start.addingTimeInterval(899))
+            XCTAssertEqual(store.showingAlerts.count, 1)
+            store.dismissExpiredAlerts(meetings: [m], now: m.start.addingTimeInterval(900))
+            XCTAssertTrue(store.showingAlerts.isEmpty)
+        }
+    }
+
+    func testChangingTimeoutAppliesToAlreadyOpenAlert() throws {
+        let m = meeting("changed")
+        try withStore { store, _ in
+            store.config.autoDismiss = .never
+            store.showingAlerts = [("\(m.key)@0", m)]
+            store.dismissExpiredAlerts(meetings: [], now: m.end)
+            XCTAssertEqual(store.showingAlerts.count, 1)
+            store.config.autoDismiss = .meetingEnd
+            store.dismissExpiredAlerts(meetings: [], now: m.end)
+            XCTAssertTrue(store.showingAlerts.isEmpty)
+        }
+    }
+
 }
