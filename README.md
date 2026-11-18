@@ -56,7 +56,7 @@ brew install --cask roypadina/tap/meetalert
 ## Features
 
 - **Multiple alerts per meeting** at whatever offsets you configure — minutes before, at start, or after (a late nag) — not just one.
-- **Desktop popup** that stays on screen until you act on it — no auto-dismiss, no silently missed alert — shown on whichever display your mouse is on.
+- **Desktop popup** that stays on screen until you act on it or the meeting ends (Auto-dismiss in Settings: meeting end, minutes after start, or Never) — no silently missed alert — shown on whichever display your mouse is on.
 - **Live countdown that changes colour as it gets close** — a large ticking numeral (minutes, then seconds, then how late you are) with the whole card shifting cyan → amber → red, and a pulsing rim once escalation has pinged your phone. State is always spelled out in words and icons too, never colour alone.
 - **A colour per calendar** — each alert shows its calendar's name and colour dot, starting from the colour macOS already uses in Calendar.app and overridable per calendar in Settings → Calendars.
 - **Keyboard shortcuts on the popup** — click the card once (this never steals focus from the app you're typing in), then `↩`/`J` join · `5` snooze 5m · `1` snooze 1m · `T` until start · `esc` snooze. The two final actions need a modifier on purpose, so ordinary typing can never kill an alert: `⌘D` dismiss, `⌘⇧I` ignore.
