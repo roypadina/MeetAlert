@@ -21,7 +21,7 @@ stops being an excuse.
 
 <br>
 
-<img src="docs/demo.gif" alt="MeetAlert in action: the menu bar shows the next meeting, its menu lists today's meetings, and an alert panel stays on screen until you Join, snooze or dismiss." width="720">
+<img src="docs/demo.gif" alt="MeetAlert in action: the menu bar shows the next meeting, its menu lists today's meetings, and an alert panel stays on screen until you Join, snooze or dismiss, or the meeting ends." width="720">
 
 <br>
 
